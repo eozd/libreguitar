@@ -1,80 +1,111 @@
+use std::fmt::Display;
 use std::io::{self, Write};
+use std::iter;
 
 use cpal::traits::DeviceTrait;
 use cpal::traits::HostTrait;
 use cpal::traits::StreamTrait;
+use cpal::BufferSize;
+use cpal::Device;
+use cpal::Host;
+use cpal::SampleRate;
+use cpal::Stream;
+use cpal::StreamConfig;
 
-fn main() {
-    let host_ids = cpal::available_hosts();
-    println!("Available hosts");
-    println!("---------------");
-    for host_id in host_ids.iter() {
-        println!("ID: {}", host_id.name());
+fn choose_via_user_input<T>(title_str: &str, options: Vec<T>) -> io::Result<usize>
+where
+    T: Display,
+{
+    let n_choices = options.len();
+    loop {
+        println!("{}", title_str);
+        println!(
+            "{}",
+            iter::repeat("-").take(title_str.len()).collect::<String>()
+        );
+        for (i, opt) in options.iter().enumerate() {
+            println!("{}) {}", i, opt);
+        }
+
+        print!("Choose an option: ");
+        io::stdout().flush().unwrap();
+        let mut buffer = String::new();
+        io::stdin().read_line(&mut buffer)?;
+        match buffer.trim().parse::<usize>() {
+            Ok(choice) if choice < n_choices => return Ok(choice),
+            _ => {
+                println!("Invalid choice!");
+            }
+        }
     }
+}
 
-    let host = cpal::default_host();
-    println!("Using host {}", host.id().name());
-    let devices: Vec<cpal::Device> = host
+fn choose_host() -> Host {
+    let hosts = cpal::available_hosts();
+    let host_names = hosts.iter().map(|x| x.name()).collect();
+    let host_id = choose_via_user_input("Available Hosts", host_names).unwrap();
+    cpal::host_from_id(hosts[host_id]).unwrap()
+}
+
+fn choose_device(host: &Host) -> Device {
+    let devices: Vec<Device> = host
         .input_devices()
         .expect("Could not get the list of devices")
         .collect();
-
-    println!();
-    println!("Available input devices");
-    println!("-----------------------");
-    for (i, device) in devices.iter().enumerate() {
-        let name = match device.name() {
+    let device_names = devices
+        .iter()
+        .map(|x| match x.name() {
             Ok(name) => name,
-            Err(_) => String::from("Error: Device has no name"),
-        };
-        println!("Device {}: {}", i, name);
+            Err(_) => String::from("Unknown device"),
+        })
+        .collect();
+    let device_id = choose_via_user_input("Available input devices", device_names).unwrap();
+    devices
+        .into_iter()
+        .nth(device_id)
+        .expect("Fatal error: User chose a device outside the range")
+}
+
+fn choose_config(device: &Device) -> StreamConfig {
+    // let supconfig = device.default_input_config().expect("No default config");
+    // let config = supconfig.config();
+    // TODO: choose from user
+    StreamConfig {
+        channels: 2,
+        sample_rate: SampleRate(44100),
+        buffer_size: BufferSize::Fixed(128),
     }
+}
 
-    let default_device = host
-        .default_input_device()
-        .expect("No input device available");
-    println!(
-        "Default device: {}",
-        default_device.name().expect("Can't get device name")
-    );
-
-    let mut buffer = String::new();
-    print!("Choose a device (Enter to skip): ");
-    io::stdout().flush().unwrap();
-    io::stdin()
-        .read_line(&mut buffer)
-        .expect("Could not read from STDIN");
-    let device;
-    let buffer = buffer.trim();
-    if buffer.len() == 0 {
-        device = &default_device;
-    } else {
-        let chosen_device_id: usize = buffer.parse().unwrap();
-        assert!(chosen_device_id < devices.len(), "Invalid device ID");
-        device = &devices[chosen_device_id];
-    }
-
-    let supconfig = device.default_input_config().expect("No default config");
-    let config = supconfig.config();
-    println!("Config {:?}", supconfig);
-    // TODO: When using Buffersize::Fixed, alsa set_hw_params crashes. Find a fix.
-    // let config = StreamConfig {
-    //     channels: 2,
-    //     sample_rate: SampleRate(44100),
-    //     buffer_size: BufferSize::Fixed(128),
-    // };
-    let stream = device
+fn build_stream(device: &Device, config: &StreamConfig) -> Stream {
+    device
         .build_input_stream(
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                println!("Read {} elements", data.len());
+                println!(
+                    "Maximum is {:?}",
+                    data.iter().cloned().fold(0. / 0., f32::max)
+                );
             },
             move |_err| {
                 println!("Error reading data from device");
             },
         )
-        .expect("Could not build stream");
+        .expect("Could not build stream")
+}
+
+fn main() {
+    let host = choose_host();
+    println!("Using host {}", host.id().name());
+
+    let device = choose_device(&host);
+    println!("Using device {}", device.name().unwrap());
+
+    let config = choose_config(&device);
+    println!("Using config {:?}", config);
+
+    let stream = build_stream(&device, &config);
     println!("Playing device...");
     stream.play().expect("Error playing the device...");
-    std::thread::sleep(std::time::Duration::from_secs(10));
+    std::thread::sleep(std::time::Duration::from_secs(1000));
 }
