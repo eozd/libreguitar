@@ -4,13 +4,13 @@ use std::iter;
 
 use cpal::traits::DeviceTrait;
 use cpal::traits::HostTrait;
-use cpal::traits::StreamTrait;
 use cpal::BufferSize;
 use cpal::Device;
 use cpal::Host;
 use cpal::SampleRate;
-use cpal::Stream;
 use cpal::StreamConfig;
+
+use fretboard_trainer::run;
 
 fn choose_via_user_input<T>(title_str: &str, options: Vec<T>) -> io::Result<usize>
 where
@@ -66,7 +66,7 @@ fn choose_device(host: &Host) -> Device {
         .expect("Fatal error: User chose a device outside the range")
 }
 
-fn choose_config(device: &Device) -> StreamConfig {
+fn choose_config(_device: &Device) -> StreamConfig {
     // let supconfig = device.default_input_config().expect("No default config");
     // let config = supconfig.config();
     // TODO: choose from user
@@ -75,23 +75,6 @@ fn choose_config(device: &Device) -> StreamConfig {
         sample_rate: SampleRate(44100),
         buffer_size: BufferSize::Fixed(128),
     }
-}
-
-fn build_stream(device: &Device, config: &StreamConfig) -> Stream {
-    device
-        .build_input_stream(
-            &config,
-            move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                println!(
-                    "Maximum is {:?}",
-                    data.iter().cloned().fold(0. / 0., f32::max)
-                );
-            },
-            move |_err| {
-                println!("Error reading data from device");
-            },
-        )
-        .expect("Could not build stream")
 }
 
 fn main() {
@@ -104,8 +87,5 @@ fn main() {
     let config = choose_config(&device);
     println!("Using config {:?}", config);
 
-    let stream = build_stream(&device, &config);
-    println!("Playing device...");
-    stream.play().expect("Error playing the device...");
-    std::thread::sleep(std::time::Duration::from_secs(1000));
+    run(device, config).unwrap();
 }
