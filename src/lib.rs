@@ -1,7 +1,53 @@
+use cpal::traits::DeviceTrait;
+use cpal::traits::StreamTrait;
+use cpal::BuildStreamError;
+use cpal::Device;
+use cpal::Stream;
+use cpal::StreamConfig;
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum GameError {
+    #[error(transparent)]
+    BuildStreamError(#[from] cpal::BuildStreamError),
+    #[error(transparent)]
+    PlayStreamError(#[from] cpal::PlayStreamError),
+}
 
 const GAME_TITLE: &str = "FRETBOARD TRAINER";
 const MAX_FRETS: usize = 24;
 const MAX_STRINGS: usize = 6;
+
+pub fn run(device: Device, config: StreamConfig) -> Result<(), GameError> {
+    let game = GameLogic::new(
+        String::from(GAME_TITLE),
+        FretRange::new(0, 12),
+        StringRange::new(1, 6 + 1),
+    );
+
+    let stream = build_stream(&device, &config, game)?;
+    println!("Playing device...");
+    stream.play()?;
+    std::thread::sleep(std::time::Duration::from_secs(1000));
+    Ok(())
+}
+
+fn build_stream(
+    device: &Device,
+    config: &StreamConfig,
+    mut game: GameLogic,
+) -> Result<Stream, BuildStreamError> {
+    device.build_input_stream(
+        &config,
+        move |data: &[f32], _: &cpal::InputCallbackInfo| {
+            game.tick(data);
+        },
+        move |_err| {
+            println!("Error reading data from device");
+        },
+    )
+}
 
 struct FretRange {
     beg_fret: usize,
