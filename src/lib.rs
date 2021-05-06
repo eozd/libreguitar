@@ -4,9 +4,10 @@ use cpal::BuildStreamError;
 use cpal::Device;
 use cpal::Stream;
 use cpal::StreamConfig;
+use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use serde::Deserialize;
 use std::error::Error;
-use std::str::FromStr;
+use std::sync::Arc;
 
 use thiserror::Error;
 
@@ -26,12 +27,11 @@ const MAX_STRINGS: usize = 6;
 
 pub fn run(device: Device, config: StreamConfig, freq_csv_path: &str) -> Result<(), GameError> {
     let note_vec = parse_freq_csv(freq_csv_path)?;
-    let freq_vec: Vec<f32> = note_vec.iter().map(|note| note.frequency).collect();
-
     let game = GameLogic::new(
         String::from(GAME_TITLE),
         FretRange::new(0, 12),
         StringRange::new(1, 6 + 1),
+        note_vec,
     );
 
     let stream = build_stream(&device, &config, game)?;
@@ -90,17 +90,6 @@ struct Note {
     frequency: f32,
 }
 
-impl Note {
-    fn new(name: NoteName, octave: usize, frequency: f32) -> Note {
-        assert!(frequency >= 0.0, "Frequency must be nonnegative");
-        Note {
-            name,
-            octave,
-            frequency,
-        }
-    }
-}
-
 struct FretRange {
     beg_fret: usize,
     end_fret: usize,
@@ -147,30 +136,83 @@ impl StringRange {
     }
 }
 
+struct AudioAnalyzer {
+    fft: Arc<dyn Fft<f32>>,
+    buffer: Vec<Complex<f32>>,
+    scratch: Vec<Complex<f32>>,
+}
+
+impl AudioAnalyzer {
+    fn new() -> AudioAnalyzer {
+        let buffer_size = 1024;
+        let mut planner = FftPlanner::new();
+        let fft = planner.plan_fft_forward(buffer_size);
+        let scratch_size = fft.get_inplace_scratch_len();
+        let scratch = vec![
+            Complex {
+                re: 0.0f32,
+                im: 0.0f32
+            };
+            scratch_size
+        ];
+        let buffer = vec![
+            Complex {
+                re: 0.0f32,
+                im: 0.0f32
+            };
+            buffer_size
+        ];
+
+        AudioAnalyzer {
+            fft,
+            buffer,
+            scratch,
+        }
+    }
+
+    fn identify_note<'a>(
+        &mut self,
+        audio_data: &[f32],
+        target_notes: &'a Vec<Note>,
+    ) -> Option<&'a Note> {
+        for i in 0..audio_data.len() {
+            self.buffer[i].re = audio_data[i];
+            self.buffer[i].im = 0.0f32;
+        }
+        self.fft
+            .process_with_scratch(&mut self.buffer, &mut self.scratch);
+        Some(&target_notes[0])
+    }
+}
+
 struct GameLogic {
     title: String,
     fret_range: FretRange,
     string_range: StringRange,
-    frame_cnt: usize,
+    target_notes: Vec<Note>,
+    analyzer: AudioAnalyzer,
 }
 
 impl GameLogic {
-    fn new(title: String, fret_range: FretRange, string_range: StringRange) -> GameLogic {
+    fn new(
+        title: String,
+        fret_range: FretRange,
+        string_range: StringRange,
+        target_notes: Vec<Note>,
+    ) -> GameLogic {
         GameLogic {
             title,
             fret_range,
             string_range,
-            frame_cnt: 0,
+            target_notes,
+            analyzer: AudioAnalyzer::new(),
         }
     }
 
     fn tick(&mut self, audio_data: &[f32]) {
-        println!(
-            "Tick {}: Maximum is {:?}",
-            self.frame_cnt,
-            audio_data.iter().cloned().fold(0. / 0., f32::max)
-        );
-        self.frame_cnt += 1;
+        if let Some(note) = self.analyzer.identify_note(audio_data, &self.target_notes) {
+            println!("Detected note: {:?}", note);
+        }
     }
 }
 
