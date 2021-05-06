@@ -210,8 +210,14 @@ impl GameLogic {
     }
 
     fn tick(&mut self, audio_data: &[f32]) {
+        println!(
+            "Channel abs sum {}",
+            audio_data.iter().map(|x| x.abs()).sum::<f32>()
+        );
+
         if let Some(note) = self.analyzer.identify_note(audio_data, &self.target_notes) {
-            println!("Detected note: {:?}", note);
+            // println!("Read {} floats", audio_data.len());
+            // println!("Detected note: {:?}", note);
         }
     }
 }
