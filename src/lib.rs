@@ -4,6 +4,9 @@ use cpal::BuildStreamError;
 use cpal::Device;
 use cpal::Stream;
 use cpal::StreamConfig;
+use serde::Deserialize;
+use std::error::Error;
+use std::str::FromStr;
 
 use thiserror::Error;
 
@@ -13,13 +16,18 @@ pub enum GameError {
     BuildStreamError(#[from] cpal::BuildStreamError),
     #[error(transparent)]
     PlayStreamError(#[from] cpal::PlayStreamError),
+    #[error(transparent)]
+    UnknownError(#[from] Box<dyn Error>),
 }
 
 const GAME_TITLE: &str = "FRETBOARD TRAINER";
 const MAX_FRETS: usize = 24;
 const MAX_STRINGS: usize = 6;
 
-pub fn run(device: Device, config: StreamConfig) -> Result<(), GameError> {
+pub fn run(device: Device, config: StreamConfig, freq_csv_path: &str) -> Result<(), GameError> {
+    let note_vec = parse_freq_csv(freq_csv_path)?;
+    let freq_vec: Vec<f32> = note_vec.iter().map(|note| note.frequency).collect();
+
     let game = GameLogic::new(
         String::from(GAME_TITLE),
         FretRange::new(0, 12),
@@ -47,6 +55,50 @@ fn build_stream(
             println!("Error reading data from device");
         },
     )
+}
+
+fn parse_freq_csv(csv_path: &str) -> Result<Vec<Note>, Box<dyn Error>> {
+    let mut rdr = csv::Reader::from_path(csv_path)?;
+    let mut iter = rdr.deserialize();
+    let mut out = Vec::new();
+    while let Some(result) = iter.next() {
+        out.push(result?);
+    }
+    Ok(out)
+}
+
+#[derive(Debug, Deserialize)]
+enum NoteName {
+    A,
+    ASharp,
+    B,
+    C,
+    CSharp,
+    D,
+    DSharp,
+    E,
+    F,
+    FSharp,
+    G,
+    GSharp,
+}
+
+#[derive(Debug, Deserialize)]
+struct Note {
+    octave: usize,
+    name: NoteName,
+    frequency: f32,
+}
+
+impl Note {
+    fn new(name: NoteName, octave: usize, frequency: f32) -> Note {
+        assert!(frequency >= 0.0, "Frequency must be nonnegative");
+        Note {
+            name,
+            octave,
+            frequency,
+        }
+    }
 }
 
 struct FretRange {

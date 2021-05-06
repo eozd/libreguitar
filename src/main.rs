@@ -12,6 +12,8 @@ use cpal::StreamConfig;
 
 use fretboard_trainer::run;
 
+const CSV_PATH: &str = "resources/guitar_frequencies.csv";
+
 fn choose_via_user_input<T>(title_str: &str, options: Vec<T>) -> io::Result<usize>
 where
     T: Display,
@@ -87,5 +89,5 @@ fn main() {
     let config = choose_config(&device);
     println!("Using config {:?}", config);
 
-    run(device, config).unwrap();
+    run(device, config, CSV_PATH).unwrap();
 }
