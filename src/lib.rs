@@ -7,6 +7,7 @@ use crate::note::parse_freq_csv;
 
 use cpal::traits::DeviceTrait;
 use cpal::traits::StreamTrait;
+use cpal::BufferSize;
 use cpal::BuildStreamError;
 use cpal::Device;
 use cpal::Stream;
@@ -36,10 +37,18 @@ fn build_stream(
     config: &StreamConfig,
     mut game: GameLogic,
 ) -> Result<Stream, BuildStreamError> {
+    let buffer_size = match config.buffer_size {
+        BufferSize::Fixed(v) => Ok(v),
+        BufferSize::Default => Err(BuildStreamError::InvalidArgument),
+    }? as usize;
+    let mut data_f64 = vec![0.0f64; buffer_size];
     device.build_input_stream(
         &config,
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            game.tick(data);
+            for i in 0..data.len() {
+                data_f64[i] = data[i] as f64;
+            }
+            game.tick(&data_f64);
         },
         move |_err| {
             // println!("Error reading data from device {}", _err);

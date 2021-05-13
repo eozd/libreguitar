@@ -31,7 +31,7 @@ pub enum NoteName {
 pub struct Note {
     pub octave: usize,
     pub name: NoteName,
-    pub frequency: f32,
+    pub frequency: f64,
 }
 
 #[cfg(test)]
