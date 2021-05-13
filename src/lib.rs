@@ -31,6 +31,7 @@ pub fn run(device: Device, config: StreamConfig, freq_csv_path: &str) -> Result<
         String::from(GAME_TITLE),
         FretRange::new(0, 12),
         StringRange::new(1, 6 + 1),
+        config.sample_rate.0 as usize,
         note_vec,
     );
 
@@ -52,7 +53,7 @@ fn build_stream(
             game.tick(data);
         },
         move |_err| {
-            println!("Error reading data from device");
+            // println!("Error reading data from device {}", _err);
         },
     )
 }
@@ -138,50 +139,93 @@ impl StringRange {
 
 struct AudioAnalyzer {
     fft: Arc<dyn Fft<f32>>,
-    buffer: Vec<Complex<f32>>,
-    scratch: Vec<Complex<f32>>,
+    fft_buffer: Vec<Complex<f32>>,
+    fft_scratch: Vec<Complex<f32>>,
+    delta_f: f32,
+    sample_rate: usize,
+    target_notes: Vec<Note>,
 }
 
 impl AudioAnalyzer {
-    fn new() -> AudioAnalyzer {
-        let buffer_size = 1024;
+    fn new(sample_rate: usize, target_notes: Vec<Note>) -> AudioAnalyzer {
+        assert!(
+            target_notes.len() > 1,
+            "Need at least two notes for analysis."
+        );
+
+        let min_freq_diff = target_notes[1].frequency - target_notes[0].frequency;
+        let delta_f = min_freq_diff / 2.0;
+        let fftsize = (sample_rate as f32 / delta_f).ceil() as usize;
+
         let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(buffer_size);
-        let scratch_size = fft.get_inplace_scratch_len();
-        let scratch = vec![
+        let fft = planner.plan_fft_forward(fftsize);
+        let fft_scratch = vec![
             Complex {
                 re: 0.0f32,
                 im: 0.0f32
             };
-            scratch_size
+            fft.get_inplace_scratch_len()
         ];
-        let buffer = vec![
+        let fft_buffer = vec![
             Complex {
                 re: 0.0f32,
                 im: 0.0f32
             };
-            buffer_size
+            fftsize
         ];
 
         AudioAnalyzer {
             fft,
-            buffer,
-            scratch,
+            fft_buffer,
+            fft_scratch,
+            delta_f,
+            sample_rate,
+            target_notes,
         }
     }
 
-    fn identify_note<'a>(
-        &mut self,
-        audio_data: &[f32],
-        target_notes: &'a Vec<Note>,
-    ) -> Option<&'a Note> {
+    fn compute_fft(&mut self, audio_data: &[f32]) {
+        assert!(
+            audio_data.len() <= self.fft_buffer.len(),
+            "Audio data is too long"
+        );
         for i in 0..audio_data.len() {
-            self.buffer[i].re = audio_data[i];
-            self.buffer[i].im = 0.0f32;
+            self.fft_buffer[i].re = audio_data[i];
+            self.fft_buffer[i].im = 0.0f32;
+        }
+        for i in audio_data.len()..self.fft_buffer.len() {
+            self.fft_buffer[i].re = 0.0f32;
+            self.fft_buffer[i].im = 0.0f32;
         }
         self.fft
-            .process_with_scratch(&mut self.buffer, &mut self.scratch);
-        Some(&target_notes[0])
+            .process_with_scratch(&mut self.fft_buffer, &mut self.fft_scratch);
+    }
+
+    fn print_freq(&self, freq_spectrum: &[Complex<f32>]) {
+        let mut maxval = freq_spectrum[0].re;
+        let mut maxidx = 0;
+        for i in 0..freq_spectrum.len() {
+            let currval = freq_spectrum[i].norm_sqr();
+            if currval > maxval {
+                maxval = currval;
+                maxidx = i;
+            }
+        }
+        let max_freq = self.delta_f * (maxidx as f32);
+        println!("Highest frequency {}", max_freq);
+    }
+
+    fn identify_note<'a>(&'a mut self, audio_data: &[f32]) -> Option<&'a Note> {
+        self.compute_fft(audio_data);
+        let fftsize = self.fft_buffer.len();
+        let n_bins = if fftsize % 2 == 0 {
+            fftsize / 2 + 1
+        } else {
+            (fftsize + 1) / 2
+        };
+
+        self.print_freq(&self.fft_buffer[..n_bins]);
+        Some(&self.target_notes[0])
     }
 }
 
@@ -189,7 +233,6 @@ struct GameLogic {
     title: String,
     fret_range: FretRange,
     string_range: StringRange,
-    target_notes: Vec<Note>,
     analyzer: AudioAnalyzer,
 }
 
@@ -198,24 +241,24 @@ impl GameLogic {
         title: String,
         fret_range: FretRange,
         string_range: StringRange,
+        sample_rate: usize,
         target_notes: Vec<Note>,
     ) -> GameLogic {
         GameLogic {
             title,
             fret_range,
             string_range,
-            target_notes,
-            analyzer: AudioAnalyzer::new(),
+            analyzer: AudioAnalyzer::new(sample_rate, target_notes),
         }
     }
 
     fn tick(&mut self, audio_data: &[f32]) {
-        println!(
-            "Channel abs sum {}",
-            audio_data.iter().map(|x| x.abs()).sum::<f32>()
-        );
+        // println!(
+        //     "Channel abs sum {}",
+        //     audio_data.iter().map(|x| x.abs()).sum::<f32>()
+        // );
 
-        if let Some(note) = self.analyzer.identify_note(audio_data, &self.target_notes) {
+        if let Some(note) = self.analyzer.identify_note(audio_data) {
             // println!("Read {} floats", audio_data.len());
             // println!("Detected note: {:?}", note);
         }
