@@ -45,3 +45,79 @@ impl TargetNotes {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::TargetNotes;
+    use crate::note::{Note, NoteName};
+
+    #[test]
+    #[should_panic]
+    fn test_empty_notes() {
+        let notes = Vec::new();
+        let _ = TargetNotes::new(notes);
+    }
+
+    #[test]
+    fn test_resolution_single_note() {
+        let notes = vec![Note {
+            octave: 1,
+            name: NoteName::A,
+            frequency: 15.0,
+        }];
+        let target_notes = TargetNotes::new(notes);
+        assert_eq!(0.0, target_notes.resolution());
+    }
+
+    #[test]
+    fn test_resolution_general_case() {
+        let notes = vec![
+            Note {
+                octave: 1,
+                name: NoteName::A,
+                frequency: 15.0,
+            },
+            Note {
+                octave: 1,
+                name: NoteName::B,
+                frequency: 17.0,
+            },
+        ];
+        let target_notes = TargetNotes::new(notes);
+        assert_eq!(2.0, target_notes.resolution());
+    }
+
+    #[test]
+    fn test_closest_note() {
+        let notes = vec![
+            Note {
+                octave: 1,
+                name: NoteName::A,
+                frequency: 15.0,
+            },
+            Note {
+                octave: 1,
+                name: NoteName::B,
+                frequency: 17.0,
+            },
+            Note {
+                octave: 1,
+                name: NoteName::B,
+                frequency: 25.0,
+            },
+        ];
+        let target_notes = TargetNotes::new(notes.clone());
+        assert_eq!(&notes[0], target_notes.get_closest(-30.0));
+        assert_eq!(&notes[0], target_notes.get_closest(3.0));
+        assert_eq!(&notes[0], target_notes.get_closest(15.0));
+        assert_eq!(&notes[0], target_notes.get_closest(15.6));
+
+        assert_eq!(&notes[1], target_notes.get_closest(16.6));
+        assert_eq!(&notes[1], target_notes.get_closest(17.0));
+        assert_eq!(&notes[1], target_notes.get_closest(20.0));
+
+        assert_eq!(&notes[2], target_notes.get_closest(23.0));
+        assert_eq!(&notes[2], target_notes.get_closest(25.0));
+        assert_eq!(&notes[2], target_notes.get_closest(500.0));
+    }
+}
