@@ -1,8 +1,54 @@
 use crate::note::Note;
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use statrs::statistics::Median;
+use std::collections::HashMap;
 use std::f64;
+use std::hash::Hash;
 use std::sync::Arc;
+
+struct TargetNotes {
+    arr: Vec<Note>,
+}
+
+impl TargetNotes {
+    fn new(mut arr: Vec<Note>) -> TargetNotes {
+        assert!(!arr.is_empty(), "Target notes cannot be empty");
+        arr.sort_unstable_by(|p, q| p.frequency.partial_cmp(&q.frequency).unwrap());
+        TargetNotes { arr }
+    }
+
+    fn get_closest(&self, freq: f64) -> &Note {
+        let search_result = self
+            .arr
+            .binary_search_by(|note| note.frequency.partial_cmp(&freq).unwrap());
+        match search_result {
+            Ok(idx) => &self.arr[idx],
+            Err(idx) => {
+                if idx == 0 {
+                    &self.arr[idx]
+                } else if idx == self.arr.len() {
+                    &self.arr[idx - 1]
+                } else {
+                    let lower_diff = (freq - self.arr[idx - 1].frequency).abs();
+                    let upper_diff = (freq - self.arr[idx].frequency).abs();
+                    if lower_diff < upper_diff {
+                        &self.arr[idx - 1]
+                    } else {
+                        &self.arr[idx]
+                    }
+                }
+            }
+        }
+    }
+
+    fn resolution(&self) -> f64 {
+        if self.arr.len() == 1 {
+            0.0
+        } else {
+            self.arr[1].frequency - self.arr[0].frequency
+        }
+    }
+}
 
 pub struct AudioAnalyzer {
     fft: Arc<dyn Fft<f64>>,
@@ -12,8 +58,7 @@ pub struct AudioAnalyzer {
     fftsize: usize,
     n_bins: usize,
     delta_f: f64,
-    sample_rate: usize,
-    target_notes: Vec<Note>,
+    target_notes: TargetNotes,
 }
 
 impl AudioAnalyzer {
@@ -23,7 +68,8 @@ impl AudioAnalyzer {
             "Need at least two notes for analysis."
         );
 
-        let min_freq_diff = target_notes[1].frequency - target_notes[0].frequency;
+        let target_notes = TargetNotes::new(target_notes);
+        let min_freq_diff = target_notes.resolution();
         let delta_f = min_freq_diff / 2.0;
         let fftsize = (sample_rate as f64 / delta_f).ceil() as usize;
         let n_bins = if fftsize % 2 == 0 {
@@ -58,7 +104,6 @@ impl AudioAnalyzer {
             fftsize,
             n_bins,
             delta_f,
-            sample_rate,
             target_notes,
         }
     }
@@ -78,7 +123,7 @@ impl AudioAnalyzer {
         }
         self.fft
             .process_with_scratch(&mut self.fft_buffer, &mut self.fft_scratch);
-        let norm_factor = 1.0 / (self.fftsize as f64).sqrt();
+        let norm_factor = 10.0 / (self.fftsize as f64);
         for i in 0..self.n_bins {
             self.spectrogram[i] = self.fft_buffer[i].norm() * norm_factor;
         }
@@ -87,22 +132,56 @@ impl AudioAnalyzer {
     pub fn identify_note<'a>(&'a mut self, audio_data: &[f64]) -> Option<&'a Note> {
         self.compute_fft(audio_data);
         moving_avg(&mut self.spectrogram[..], 10);
-        print_freq(&self.spectrogram, self.delta_f, &self.target_notes);
-        Some(&self.target_notes[0])
+        let note = find_note(&self.spectrogram, self.delta_f, &self.target_notes);
+        note
     }
 }
 
-fn print_freq(freq_spectrum: &[f64], delta_f: f64, target_notes: &Vec<Note>) {
+fn find_note<'a>(
+    freq_spectrum: &[f64],
+    delta_f: f64,
+    target_notes: &'a TargetNotes,
+) -> Option<&'a Note> {
     let median = freq_spectrum.median();
-    let mut peaks = find_peaks(freq_spectrum, Some(25.0 * median), Some(25));
+    let mut peaks = find_peaks(freq_spectrum, Some(50. * median), Some(25));
     peaks.sort_unstable_by(|a, b| b.value.partial_cmp(&a.value).unwrap());
-    let mut top_frequencies = [f64::NAN; 5];
-    for (i, p) in peaks.iter().enumerate() {
-        if i < 5 {
-            top_frequencies[i] = (p.idx as f64) * delta_f;
+    let top_notes: Vec<&Note> = peaks
+        .iter()
+        .take(5)
+        .map(|p| {
+            let freq = (p.idx as f64) * delta_f;
+            let note = target_notes.get_closest(freq);
+            note
+        })
+        .collect();
+    let top_notenames = top_notes.iter().map(|note| &note.name);
+    if let Some(notename) = most_common(top_notenames) {
+        for note in top_notes.into_iter() {
+            if &note.name == notename {
+                return Some(note);
+            }
         }
     }
-    println!("Top 5 frequencies {:?}", &top_frequencies);
+    None
+}
+
+fn most_common<'a, T>(notes: impl Iterator<Item = &'a T>) -> Option<&'a T>
+where
+    T: Eq + Hash,
+{
+    let mut counts = HashMap::new();
+    for val in notes {
+        if let Some(count) = counts.get_mut(val) {
+            *count += 1;
+        } else {
+            counts.insert(val, 1);
+        }
+    }
+    if let Some((value, _)) = counts.into_iter().max_by_key(|(_, count)| *count) {
+        Some(value)
+    } else {
+        None
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -132,9 +211,8 @@ fn find_peaks(
     let min_peak_dist = min_peak_dist.unwrap_or(0);
     let mut out: Vec<Peak<f64>> = Vec::new();
     for i in 0..n_samples {
-        let greater_than_left = i == 0 || (signal[i] > signal[i - 1] && signal[i] >= min_height);
-        let greater_than_right =
-            i == n_samples - 1 || (signal[i] > signal[i + 1] && signal[i] >= min_height);
+        let greater_than_left = i == 0 || signal[i] > signal[i - 1];
+        let greater_than_right = i == n_samples - 1 || signal[i] > signal[i + 1];
         if greater_than_left && greater_than_right && signal[i] >= min_height {
             if out.is_empty() || i - out[out.len() - 1].idx >= min_peak_dist {
                 out.push(Peak::new(i, signal[i]));
@@ -280,6 +358,49 @@ mod tests_find_peaks {
         let signal = vec![0.5, 1.0, 2.0, 1.0, 0.0, 5.0, 2.5];
         let expected = vec![Peak::new(2, 2.0), Peak::new(5, 5.0)];
         let actual = find_peaks(&signal, None, None);
+        assert_eq!(expected, actual);
+    }
+}
+
+#[cfg(test)]
+mod tests_most_common {
+    use super::most_common;
+
+    #[test]
+    fn most_common_empty_iter() {
+        let arr: Vec<i32> = Vec::new();
+        let actual = most_common(arr.iter());
+        assert_eq!(actual, None);
+    }
+
+    #[test]
+    fn most_common_same_elem_0() {
+        let arr = vec![1];
+        let expected = 1;
+        let actual = *most_common(arr.iter()).unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn most_common_same_elem_1() {
+        let arr = vec![2, 2, 2, 2];
+        let expected = 2;
+        let actual = *most_common(arr.iter()).unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn most_common_equal_counts() {
+        let arr = vec!["a", "b", "c"];
+        let actual = *most_common(arr.iter()).unwrap();
+        assert!(actual == "a" || actual == "b" || actual == "c");
+    }
+
+    #[test]
+    fn most_common_general_case() {
+        let arr = vec![("a", 1), ("b", -5), ("a", 1)];
+        let expected = ("a", 1);
+        let actual = *most_common(arr.iter()).unwrap();
         assert_eq!(expected, actual);
     }
 }

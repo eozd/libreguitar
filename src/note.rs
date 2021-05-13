@@ -11,7 +11,7 @@ pub fn parse_freq_csv(csv_path: &str) -> Result<Vec<Note>, Box<dyn Error>> {
     Ok(out)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash)]
 pub enum NoteName {
     A,
     ASharp,

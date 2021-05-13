@@ -88,7 +88,7 @@ impl GameLogic {
     pub fn tick(&mut self, audio_data: &[f64]) {
         if let Some(note) = self.analyzer.identify_note(audio_data) {
             // println!("Read {} floats", audio_data.len());
-            // println!("Detected note: {:?}", note);
+            println!("Detected note: {:?}", note);
         }
     }
 }
