@@ -5,6 +5,11 @@ use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::f64;
 use std::sync::Arc;
 
+pub struct AnalysisResult<'a> {
+    pub note: Option<&'a Note>,
+    pub spectrogram: &'a [f64],
+}
+
 pub struct AudioAnalyzer {
     fft: Arc<dyn Fft<f64>>,
     fft_buffer: Vec<Complex<f64>>,
@@ -84,10 +89,13 @@ impl AudioAnalyzer {
         }
     }
 
-    pub fn identify_note<'a>(&'a mut self, audio_data: &[f64]) -> Option<&'a Note> {
+    pub fn identify_note<'a>(&'a mut self, audio_data: &[f64]) -> AnalysisResult<'a> {
         self.compute_fft(audio_data);
         moving_avg(&mut self.spectrogram[..], 10);
         let note = find_note(&self.spectrogram, self.delta_f, &self.target_notes);
-        note
+        AnalysisResult {
+            note: note,
+            spectrogram: &self.spectrogram,
+        }
     }
 }
