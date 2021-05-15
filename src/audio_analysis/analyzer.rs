@@ -2,15 +2,16 @@ use crate::audio_analysis::algorithm::{find_note, moving_avg};
 use crate::audio_analysis::analysis_result::AnalysisResult;
 use crate::audio_analysis::target_notes::TargetNotes;
 use crate::note::Note;
-use rustfft::{num_complex::Complex, Fft, FftPlanner};
+use realfft::{num_complex::Complex, RealFftPlanner, RealToComplex};
 use std::f64;
 use std::sync::Arc;
 
 pub struct AudioAnalyzer {
-    fft: Arc<dyn Fft<f64>>,
-    fft_buffer: Vec<Complex<f64>>,
+    fft: Arc<dyn RealToComplex<f64>>,
+    fft_buffer: Vec<f64>,
     fft_scratch: Vec<Complex<f64>>,
-    spectrogram: Vec<f64>,
+    spectrogram: Vec<Complex<f64>>,
+    freq_magnitudes: Vec<f64>,
     fftsize: usize,
     n_bins: usize,
     delta_f: f64,
@@ -28,35 +29,20 @@ impl AudioAnalyzer {
         let min_freq_diff = target_notes.resolution();
         let delta_f = min_freq_diff / 2.0;
         let fftsize = (sample_rate as f64 / delta_f).ceil() as usize;
-        let n_bins = if fftsize % 2 == 0 {
-            fftsize / 2 + 1
-        } else {
-            (fftsize + 1) / 2
-        };
 
-        let mut planner = FftPlanner::new();
+        let mut planner = RealFftPlanner::<f64>::new();
         let fft = planner.plan_fft_forward(fftsize);
-        let fft_scratch = vec![
-            Complex {
-                re: 0.0f64,
-                im: 0.0f64
-            };
-            fft.get_inplace_scratch_len()
-        ];
-        let fft_buffer = vec![
-            Complex {
-                re: 0.0f64,
-                im: 0.0f64
-            };
-            fftsize
-        ];
-
-        let spectrogram = vec![0.0f64; n_bins];
+        let fft_buffer = fft.make_input_vec();
+        let spectrogram = fft.make_output_vec();
+        let fft_scratch = fft.make_scratch_vec();
+        let n_bins = spectrogram.len();
+        let freq_magnitudes = vec![0.0f64; n_bins];
         AudioAnalyzer {
             fft,
             fft_buffer,
             fft_scratch,
             spectrogram,
+            freq_magnitudes,
             fftsize,
             n_bins,
             delta_f,
@@ -72,34 +58,38 @@ impl AudioAnalyzer {
         self.delta_f
     }
 
-    fn compute_fft(&mut self, audio_data: &[f64]) {
-        assert!(
-            audio_data.len() <= self.fft_buffer.len(),
-            "Audio data is too long"
-        );
-        for i in 0..audio_data.len() {
-            self.fft_buffer[i].re = audio_data[i];
-            self.fft_buffer[i].im = 0.0f64;
+    fn compute_fft(&mut self, audio_data: impl ExactSizeIterator<Item = f64>) {
+        let n_elems = audio_data.len();
+        assert!(n_elems <= self.fft_buffer.len(), "Audio data is too long");
+        for (i, val) in audio_data.enumerate() {
+            self.fft_buffer[i] = val;
         }
-        for i in audio_data.len()..self.fft_buffer.len() {
-            self.fft_buffer[i].re = 0.0f64;
-            self.fft_buffer[i].im = 0.0f64;
+        for i in n_elems..self.fft_buffer.len() {
+            self.fft_buffer[i] = 0.0f64;
         }
         self.fft
-            .process_with_scratch(&mut self.fft_buffer, &mut self.fft_scratch);
+            .process_with_scratch(
+                &mut self.fft_buffer,
+                &mut self.spectrogram,
+                &mut self.fft_scratch,
+            )
+            .unwrap();
         let norm_factor = 10.0 / (self.fftsize as f64);
         for i in 0..self.n_bins {
-            self.spectrogram[i] = self.fft_buffer[i].norm() * norm_factor;
+            self.freq_magnitudes[i] = self.spectrogram[i].norm() * norm_factor;
         }
     }
 
-    pub fn identify_note(&mut self, audio_data: &[f64]) -> AnalysisResult {
+    pub fn identify_note(
+        &mut self,
+        audio_data: impl ExactSizeIterator<Item = f64>,
+    ) -> AnalysisResult {
         self.compute_fft(audio_data);
-        moving_avg(&mut self.spectrogram[..], 10);
-        let note = find_note(&self.spectrogram, self.delta_f, &self.target_notes);
+        moving_avg(&mut self.freq_magnitudes[..], 11);
+        let note = find_note(&self.freq_magnitudes, self.delta_f, &self.target_notes);
         AnalysisResult {
             note: note,
-            spectrogram: &self.spectrogram,
+            spectrogram: &self.freq_magnitudes,
         }
     }
 }

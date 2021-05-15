@@ -67,7 +67,7 @@ impl Visualizer {
         let mut chart = ChartBuilder::on(&root)
             .margin(10)
             .set_all_label_area_size(30)
-            .build_cartesian_2d(beg..end, 0.0..0.01)
+            .build_cartesian_2d(beg..2000.0, 0.0..0.01)
             .unwrap();
 
         chart

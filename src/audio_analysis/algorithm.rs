@@ -6,11 +6,12 @@ use std::hash::Hash;
 
 pub fn find_note(freq_spectrum: &[f64], delta_f: f64, target_notes: &TargetNotes) -> Option<Note> {
     let median = freq_spectrum.median();
-    let mut peaks = find_peaks(freq_spectrum, Some(50. * median), Some(25));
-    peaks.sort_unstable_by(|a, b| b.value.partial_cmp(&a.value).unwrap());
+    let mut peaks = find_peaks(freq_spectrum, Some(100. * median), Some(10));
+    peaks.sort_unstable_by(|a, b| a.value.partial_cmp(&b.value).unwrap());
     let top_notes: Vec<&Note> = peaks
-        .iter()
-        .take(5)
+        .into_iter()
+        .rev()
+        .take(1)
         .map(|p| {
             let freq = (p.idx as f64) * delta_f;
             let note = target_notes.get_closest(freq);
@@ -73,7 +74,7 @@ fn find_peaks(
     let min_height = min_height.unwrap_or(0.0);
     let min_peak_dist = min_peak_dist.unwrap_or(0);
     let mut out: Vec<Peak<f64>> = Vec::new();
-    for i in 0..n_samples {
+    for i in 1..n_samples - 1 {
         let greater_than_left = i == 0 || signal[i] > signal[i - 1];
         let greater_than_right = i == n_samples - 1 || signal[i] > signal[i + 1];
         if greater_than_left && greater_than_right && signal[i] >= min_height {

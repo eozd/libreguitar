@@ -2,6 +2,7 @@ use crate::audio_analysis::AudioAnalyzer;
 use crate::note::Note;
 use crate::visualization::FrameData;
 use crate::visualization::Visualizer;
+use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::mpsc;
 use thiserror::Error;
@@ -119,30 +120,36 @@ impl GameLogic {
     }
 }
 
-fn build_audio_stream<'a>(
+fn build_audio_stream(
     device: Device,
     config: StreamConfig,
     mut analyzer: AudioAnalyzer,
     tx: mpsc::Sender<FrameData>,
 ) -> Result<Stream, BuildStreamError> {
-    let buffer_size = match config.buffer_size {
-        BufferSize::Fixed(v) => Ok(v),
-        BufferSize::Default => Err(BuildStreamError::InvalidArgument),
-    }? as usize;
-    let mut data_f64 = vec![0.0f64; buffer_size];
+    // let buffer_size = match config.buffer_size {
+    //     BufferSize::Fixed(v) => Ok(v),
+    //     BufferSize::Default => Err(BuildStreamError::InvalidArgument),
+    // }? as usize;
+    let mut data_f64 = VecDeque::from(vec![0.0; 1536]);
+    data_f64.shrink_to_fit();
     device.build_input_stream(
         &config,
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
             for i in 0..data.len() {
-                data_f64[i] = data[i] as f64;
+                if i % 2 == 0 {
+                    data_f64.pop_back();
+                    data_f64.push_front(data[i] as f64);
+                }
             }
-            let analysis = analyzer.identify_note(&data_f64);
+            let analysis = analyzer.identify_note(data_f64.iter().cloned());
+            if let Some(note) = &analysis.note {
+                println!("{:?}", note);
+            }
             let frame_data = FrameData {
                 note: analysis.note,
                 spectrogram: Vec::from(analysis.spectrogram),
             };
             tx.send(frame_data).unwrap();
-            // TODO: send analysis results back to GameLogic
         },
         move |_err| {
             // println!("Error reading data from device {}", _err);
