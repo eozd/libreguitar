@@ -1,4 +1,5 @@
 use crate::audio_analysis::algorithm::{find_note, moving_avg};
+use crate::audio_analysis::analysis_result::AnalysisResult;
 use crate::audio_analysis::target_notes::TargetNotes;
 use crate::note::Note;
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
@@ -63,6 +64,14 @@ impl AudioAnalyzer {
         }
     }
 
+    pub fn n_bins(&self) -> usize {
+        self.n_bins
+    }
+
+    pub fn delta_f(&self) -> f64 {
+        self.delta_f
+    }
+
     fn compute_fft(&mut self, audio_data: &[f64]) {
         assert!(
             audio_data.len() <= self.fft_buffer.len(),
@@ -84,10 +93,13 @@ impl AudioAnalyzer {
         }
     }
 
-    pub fn identify_note<'a>(&'a mut self, audio_data: &[f64]) -> Option<&'a Note> {
+    pub fn identify_note(&mut self, audio_data: &[f64]) -> AnalysisResult {
         self.compute_fft(audio_data);
         moving_avg(&mut self.spectrogram[..], 10);
         let note = find_note(&self.spectrogram, self.delta_f, &self.target_notes);
-        note
+        AnalysisResult {
+            note: note,
+            spectrogram: &self.spectrogram,
+        }
     }
 }

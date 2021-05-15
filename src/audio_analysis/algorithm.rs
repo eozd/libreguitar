@@ -4,11 +4,7 @@ use statrs::statistics::Median;
 use std::collections::HashMap;
 use std::hash::Hash;
 
-pub fn find_note<'a>(
-    freq_spectrum: &[f64],
-    delta_f: f64,
-    target_notes: &'a TargetNotes,
-) -> Option<&'a Note> {
+pub fn find_note(freq_spectrum: &[f64], delta_f: f64, target_notes: &TargetNotes) -> Option<Note> {
     let median = freq_spectrum.median();
     let mut peaks = find_peaks(freq_spectrum, Some(50. * median), Some(25));
     peaks.sort_unstable_by(|a, b| b.value.partial_cmp(&a.value).unwrap());
@@ -25,7 +21,7 @@ pub fn find_note<'a>(
     if let Some(notename) = most_common(top_notenames) {
         for note in top_notes.into_iter() {
             if &note.name == notename {
-                return Some(note);
+                return Some(note.clone());
             }
         }
     }
