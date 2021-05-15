@@ -1,7 +1,7 @@
 mod audio_analysis;
 mod game;
 mod note;
-mod visualizer;
+mod visualization;
 
 use crate::game::{FretRange, GameError, GameLogic, StringRange};
 use crate::note::parse_freq_csv;

@@ -1,7 +1,9 @@
 use crate::audio_analysis::AudioAnalyzer;
 use crate::note::Note;
-use crate::visualizer::Visualizer;
+use crate::visualization::FrameData;
+use crate::visualization::Visualizer;
 use std::error::Error;
+use std::sync::mpsc;
 use thiserror::Error;
 
 use cpal::traits::DeviceTrait;
@@ -88,9 +90,15 @@ impl GameLogic {
         string_range: StringRange,
         target_notes: Vec<Note>,
     ) -> Result<GameLogic, GameError> {
+        let (analysis_tx, analysis_rx) = mpsc::channel();
         let analyzer = AudioAnalyzer::new(config.sample_rate.0 as usize, target_notes);
-        let audio_stream = build_audio_stream(device, config, analyzer)?;
-        let visualizer = Visualizer::new();
+        let xaxis_props = (
+            0.0,
+            analyzer.n_bins() as f64 / analyzer.delta_f(),
+            analyzer.delta_f(),
+        );
+        let audio_stream = build_audio_stream(device, config, analyzer, analysis_tx)?;
+        let visualizer = Visualizer::new(analysis_rx, xaxis_props);
         Ok(GameLogic {
             title,
             fret_range,
@@ -102,16 +110,20 @@ impl GameLogic {
 
     pub fn run(&mut self) -> Result<(), GameError> {
         println!("Playing device...");
+        // if let Some(note) = analysis.note {
+        //     println!("Detected note: {:?}", note);
+        // }
         self.audio_stream.play()?;
         self.visualizer.animate();
         Ok(())
     }
 }
 
-fn build_audio_stream(
+fn build_audio_stream<'a>(
     device: Device,
     config: StreamConfig,
     mut analyzer: AudioAnalyzer,
+    tx: mpsc::Sender<FrameData>,
 ) -> Result<Stream, BuildStreamError> {
     let buffer_size = match config.buffer_size {
         BufferSize::Fixed(v) => Ok(v),
@@ -125,9 +137,11 @@ fn build_audio_stream(
                 data_f64[i] = data[i] as f64;
             }
             let analysis = analyzer.identify_note(&data_f64);
-            if let Some(note) = analysis.note {
-                println!("Detected note: {:?}", note);
-            }
+            let frame_data = FrameData {
+                note: analysis.note,
+                spectrogram: Vec::from(analysis.spectrogram),
+            };
+            tx.send(frame_data).unwrap();
             // TODO: send analysis results back to GameLogic
         },
         move |_err| {

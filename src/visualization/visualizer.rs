@@ -1,12 +1,17 @@
+// DISCLAIMER: Major parts of the frame handling in this file is adapted
+// from https://github.com/38/plotters/blob/master/examples/minifb-demo/src/main.rs
+use crate::visualization::FrameData;
 use minifb::{Key, Window, WindowOptions};
+use plotters::chart::ChartState;
+use plotters::coord::types::RangedCoordf64;
 use plotters::prelude::*;
 use plotters_bitmap::bitmap_pixel::BGRXPixel;
 use plotters_bitmap::BitMapBackend;
 use std::borrow::{Borrow, BorrowMut};
-use std::f64::consts::PI;
+use std::sync::mpsc;
 
-const W: usize = 1024;
-const H: usize = 768;
+const W: usize = 1280;
+const H: usize = 960;
 
 const FRAME_RATE: f64 = 30.0;
 const FRAME_PERIOD: f64 = 1.0 / FRAME_RATE;
@@ -40,16 +45,13 @@ impl BorrowMut<[u32]> for BufferWrapper {
 pub struct Visualizer {
     window: minifb::Window,
     buf: BufferWrapper,
-    cs: plotters::chart::ChartState<
-        plotters::prelude::Cartesian2d<
-            plotters::coord::types::RangedCoordf64,
-            plotters::coord::types::RangedCoordf64,
-        >,
-    >,
+    cs: ChartState<Cartesian2d<RangedCoordf64, RangedCoordf64>>,
+    xaxis: Vec<f64>,
+    rx: mpsc::Receiver<FrameData>,
 }
 
 impl Visualizer {
-    pub fn new() -> Visualizer {
+    pub fn new(rx: mpsc::Receiver<FrameData>, xaxis_props: (f64, f64, f64)) -> Visualizer {
         let mut buf = BufferWrapper(vec![0u32; W * H]);
 
         let window = Window::new("Default Plotter Window", W, H, WindowOptions::default()).unwrap();
@@ -61,10 +63,11 @@ impl Visualizer {
         .into_drawing_area();
         root.fill(&BLACK).unwrap();
 
+        let (beg, end, step) = xaxis_props;
         let mut chart = ChartBuilder::on(&root)
             .margin(10)
             .set_all_label_area_size(30)
-            .build_cartesian_2d(-1.2..1.2, -1.2..1.2)
+            .build_cartesian_2d(beg..end, 0.0..0.01)
             .unwrap();
 
         chart
@@ -76,15 +79,22 @@ impl Visualizer {
 
         let cs = chart.into_chart_state();
         drop(root);
-        Visualizer { window, buf, cs }
+        Visualizer {
+            window,
+            buf,
+            cs,
+            xaxis: (beg..end).step(step).values().collect(),
+            rx,
+        }
     }
 
     pub fn animate(&mut self) {
-        let n = 100;
-        let data: Vec<f64> = (0..n).map(|x| (x as f64 / n as f64) * 2.0 * PI).collect();
         while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
+            let packet = self.rx.try_iter().last();
+            if let Some(analysis) = packet {
+                self.draw(&analysis.spectrogram);
+            }
             std::thread::sleep(std::time::Duration::from_secs_f64(FRAME_PERIOD));
-            self.draw(&data);
         }
     }
 
@@ -105,7 +115,7 @@ impl Visualizer {
             .draw()
             .unwrap();
 
-        let data = arr.iter().enumerate().map(|(i, v)| (i as f64, *v));
+        let data = self.xaxis.iter().cloned().zip(arr.iter().cloned());
         chart.draw_series(LineSeries::new(data, &GREEN)).unwrap();
 
         drop(root);
