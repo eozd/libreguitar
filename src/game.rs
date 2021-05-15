@@ -1,7 +1,16 @@
 use crate::audio_analysis::AudioAnalyzer;
 use crate::note::Note;
+use crate::visualizer::Visualizer;
 use std::error::Error;
 use thiserror::Error;
+
+use cpal::traits::DeviceTrait;
+use cpal::traits::StreamTrait;
+use cpal::BufferSize;
+use cpal::BuildStreamError;
+use cpal::Device;
+use cpal::Stream;
+use cpal::StreamConfig;
 
 const MAX_FRETS: usize = 24;
 const MAX_STRINGS: usize = 6;
@@ -66,31 +75,65 @@ pub struct GameLogic {
     title: String,
     fret_range: FretRange,
     string_range: StringRange,
-    analyzer: AudioAnalyzer,
+    audio_stream: Stream,
+    visualizer: Visualizer,
 }
 
 impl GameLogic {
     pub fn new(
+        device: Device,
+        config: StreamConfig,
         title: String,
         fret_range: FretRange,
         string_range: StringRange,
-        sample_rate: usize,
         target_notes: Vec<Note>,
-    ) -> GameLogic {
-        GameLogic {
+    ) -> Result<GameLogic, GameError> {
+        let analyzer = AudioAnalyzer::new(config.sample_rate.0 as usize, target_notes);
+        let audio_stream = build_audio_stream(device, config, analyzer)?;
+        let visualizer = Visualizer::new();
+        Ok(GameLogic {
             title,
             fret_range,
             string_range,
-            analyzer: AudioAnalyzer::new(sample_rate, target_notes),
-        }
+            audio_stream,
+            visualizer,
+        })
     }
 
-    pub fn tick(&mut self, audio_data: &[f64]) {
-        if let Some(note) = self.analyzer.identify_note(audio_data) {
-            // println!("Read {} floats", audio_data.len());
-            println!("Detected note: {:?}", note);
-        }
+    pub fn run(&mut self) -> Result<(), GameError> {
+        println!("Playing device...");
+        self.audio_stream.play()?;
+        self.visualizer.animate();
+        Ok(())
     }
+}
+
+fn build_audio_stream(
+    device: Device,
+    config: StreamConfig,
+    mut analyzer: AudioAnalyzer,
+) -> Result<Stream, BuildStreamError> {
+    let buffer_size = match config.buffer_size {
+        BufferSize::Fixed(v) => Ok(v),
+        BufferSize::Default => Err(BuildStreamError::InvalidArgument),
+    }? as usize;
+    let mut data_f64 = vec![0.0f64; buffer_size];
+    device.build_input_stream(
+        &config,
+        move |data: &[f32], _: &cpal::InputCallbackInfo| {
+            for i in 0..data.len() {
+                data_f64[i] = data[i] as f64;
+            }
+            let analysis = analyzer.identify_note(&data_f64);
+            if let Some(note) = analysis.note {
+                println!("Detected note: {:?}", note);
+            }
+            // TODO: send analysis results back to GameLogic
+        },
+        move |_err| {
+            // println!("Error reading data from device {}", _err);
+        },
+    )
 }
 
 #[cfg(test)]

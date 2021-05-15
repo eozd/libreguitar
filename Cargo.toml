@@ -9,10 +9,11 @@ edition = "2018"
 [dependencies]
 thiserror = "1.0"
 rustfft = "6.0"
+cpal = { version = "0.13.3", features = ["jack"] }
 csv = "1.1"
 serde = { version = "1", features = ["derive"]}
 statrs = "0.13"
-
-[dependencies.cpal]
-version = "0.13.3"
-features = ["jack"]
+minifb = "0.13"
+plotters = { version = "0.3", default_features = false, features = ["ttf", "line_series"] }
+# plotters = "0.3"
+plotters-bitmap = { version = "0.3", default_features = false }
