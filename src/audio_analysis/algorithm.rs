@@ -5,13 +5,14 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 pub fn find_note(freq_spectrum: &[f64], delta_f: f64, target_notes: &TargetNotes) -> Option<Note> {
+    // TODO: make the algorithm adaptive instead of hardcoding these constants
     let median = freq_spectrum.median();
-    let mut peaks = find_peaks(freq_spectrum, Some(100. * median), Some(10));
+    let mut peaks = find_peaks(freq_spectrum, Some(500. * median), Some(10));
     peaks.sort_unstable_by(|a, b| a.value.partial_cmp(&b.value).unwrap());
     let top_notes: Vec<&Note> = peaks
         .into_iter()
         .rev()
-        .take(1)
+        .take(5)
         .map(|p| {
             let freq = (p.idx as f64) * delta_f;
             let note = target_notes.get_closest(freq);
@@ -20,10 +21,10 @@ pub fn find_note(freq_spectrum: &[f64], delta_f: f64, target_notes: &TargetNotes
         .collect();
     let top_notenames = top_notes.iter().map(|note| &note.name);
     if let Some(notename) = most_common(top_notenames) {
-        for note in top_notes.into_iter() {
-            if &note.name == notename {
-                return Some(note.clone());
-            }
+        let top_notes = top_notes.into_iter().filter(|x| x.name == *notename);
+        let min_note = top_notes.min_by(|a, b| a.frequency.partial_cmp(&b.frequency).unwrap());
+        if let Some(note) = min_note {
+            return Some(note.clone());
         }
     }
     None
@@ -74,7 +75,7 @@ fn find_peaks(
     let min_height = min_height.unwrap_or(0.0);
     let min_peak_dist = min_peak_dist.unwrap_or(0);
     let mut out: Vec<Peak<f64>> = Vec::new();
-    for i in 1..n_samples - 1 {
+    for i in 0..n_samples {
         let greater_than_left = i == 0 || signal[i] > signal[i - 1];
         let greater_than_right = i == n_samples - 1 || signal[i] > signal[i + 1];
         if greater_than_left && greater_than_right && signal[i] >= min_height {
