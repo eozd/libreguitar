@@ -73,7 +73,7 @@ fn choose_config(_device: &Device) -> StreamConfig {
     // let config = supconfig.config();
     // TODO: choose from user
     StreamConfig {
-        channels: 1,
+        channels: 2,
         sample_rate: SampleRate(44100),
         buffer_size: BufferSize::Fixed(128),
     }

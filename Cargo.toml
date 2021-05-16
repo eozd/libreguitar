@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 thiserror = "1.0"
 rustfft = "6.0"
+realfft = "2.0"
 cpal = { version = "0.13.3", features = ["jack"] }
 csv = "1.1"
 serde = { version = "1", features = ["derive"]}

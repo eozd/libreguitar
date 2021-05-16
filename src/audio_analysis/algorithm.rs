@@ -5,11 +5,13 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 pub fn find_note(freq_spectrum: &[f64], delta_f: f64, target_notes: &TargetNotes) -> Option<Note> {
+    // TODO: make the algorithm adaptive instead of hardcoding these constants
     let median = freq_spectrum.median();
-    let mut peaks = find_peaks(freq_spectrum, Some(50. * median), Some(25));
-    peaks.sort_unstable_by(|a, b| b.value.partial_cmp(&a.value).unwrap());
+    let mut peaks = find_peaks(freq_spectrum, Some(500. * median), Some(10));
+    peaks.sort_unstable_by(|a, b| a.value.partial_cmp(&b.value).unwrap());
     let top_notes: Vec<&Note> = peaks
-        .iter()
+        .into_iter()
+        .rev()
         .take(5)
         .map(|p| {
             let freq = (p.idx as f64) * delta_f;
@@ -19,10 +21,10 @@ pub fn find_note(freq_spectrum: &[f64], delta_f: f64, target_notes: &TargetNotes
         .collect();
     let top_notenames = top_notes.iter().map(|note| &note.name);
     if let Some(notename) = most_common(top_notenames) {
-        for note in top_notes.into_iter() {
-            if &note.name == notename {
-                return Some(note.clone());
-            }
+        let top_notes = top_notes.into_iter().filter(|x| x.name == *notename);
+        let min_note = top_notes.min_by(|a, b| a.frequency.partial_cmp(&b.frequency).unwrap());
+        if let Some(note) = min_note {
+            return Some(note.clone());
         }
     }
     None

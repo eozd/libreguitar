@@ -13,9 +13,6 @@ use std::sync::mpsc;
 const W: usize = 1280;
 const H: usize = 960;
 
-const FRAME_RATE: f64 = 30.0;
-const FRAME_PERIOD: f64 = 1.0 / FRAME_RATE;
-
 struct BufferWrapper(Vec<u32>);
 impl Borrow<[u8]> for BufferWrapper {
     fn borrow(&self) -> &[u8] {
@@ -42,7 +39,7 @@ impl BorrowMut<[u32]> for BufferWrapper {
     }
 }
 
-pub struct Visualizer {
+pub struct GUIVisualizer {
     window: minifb::Window,
     buf: BufferWrapper,
     cs: ChartState<Cartesian2d<RangedCoordf64, RangedCoordf64>>,
@@ -50,8 +47,8 @@ pub struct Visualizer {
     rx: mpsc::Receiver<FrameData>,
 }
 
-impl Visualizer {
-    pub fn new(rx: mpsc::Receiver<FrameData>, xaxis_props: (f64, f64, f64)) -> Visualizer {
+impl GUIVisualizer {
+    pub fn new(rx: mpsc::Receiver<FrameData>, xaxis_props: (f64, f64, f64)) -> GUIVisualizer {
         let mut buf = BufferWrapper(vec![0u32; W * H]);
 
         let window = Window::new("Default Plotter Window", W, H, WindowOptions::default()).unwrap();
@@ -67,7 +64,7 @@ impl Visualizer {
         let mut chart = ChartBuilder::on(&root)
             .margin(10)
             .set_all_label_area_size(30)
-            .build_cartesian_2d(beg..end, 0.0..0.01)
+            .build_cartesian_2d(beg..2000.0, 0.0..0.01)
             .unwrap();
 
         chart
@@ -79,7 +76,7 @@ impl Visualizer {
 
         let cs = chart.into_chart_state();
         drop(root);
-        Visualizer {
+        GUIVisualizer {
             window,
             buf,
             cs,
@@ -88,17 +85,16 @@ impl Visualizer {
         }
     }
 
-    pub fn animate(&mut self) {
-        while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
-            let packet = self.rx.try_iter().last();
-            if let Some(analysis) = packet {
-                self.draw(&analysis.spectrogram);
-            }
-            std::thread::sleep(std::time::Duration::from_secs_f64(FRAME_PERIOD));
-        }
+    pub fn is_open(&self) -> bool {
+        return self.window.is_open() && !self.window.is_key_down(Key::Escape);
     }
 
-    fn draw(&mut self, arr: &[f64]) {
+    pub fn draw(&mut self) {
+        let packet = self.rx.try_iter().last();
+        if let None = packet {
+            return;
+        }
+        let arr = packet.unwrap().spectrogram;
         let root = BitMapBackend::<BGRXPixel>::with_buffer_and_format(
             self.buf.borrow_mut(),
             (W as u32, H as u32),
