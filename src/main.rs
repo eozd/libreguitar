@@ -75,7 +75,7 @@ fn choose_config(_device: &Device) -> StreamConfig {
     StreamConfig {
         channels: 2,
         sample_rate: SampleRate(44100),
-        buffer_size: BufferSize::Fixed(2048),
+        buffer_size: BufferSize::Fixed(128),
     }
 }
 

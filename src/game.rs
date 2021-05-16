@@ -1,7 +1,6 @@
 use crate::audio_analysis::AudioAnalyzer;
 use crate::note::Note;
-use crate::visualization::FrameData;
-use crate::visualization::Visualizer;
+use crate::visualization::{ConsoleData, ConsoleVisualizer, FrameData, GUIVisualizer};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::mpsc;
@@ -9,14 +8,21 @@ use thiserror::Error;
 
 use cpal::traits::DeviceTrait;
 use cpal::traits::StreamTrait;
-use cpal::BufferSize;
 use cpal::BuildStreamError;
 use cpal::Device;
 use cpal::Stream;
 use cpal::StreamConfig;
 
+// TODO: get these from user
 const MAX_FRETS: usize = 24;
 const MAX_STRINGS: usize = 6;
+const FRAME_RATE: f64 = 30.0;
+const FRAME_PERIOD: f64 = 1.0 / FRAME_RATE;
+// Increasing this value further would cause latency in real time frequency detection.
+// Decreasing this value reduces FFT accuracy (particularly for low notes such as E2),
+// as the low frequency notes don't get enough time to oscillate. The effect on
+// high frequency notes such A4, A5, etc. is minimal even with block size of 128.
+const MIN_N_SAMPLES_IN_AUDIO_BLOCK: usize = 2048;
 
 #[derive(Error, Debug)]
 pub enum GameError {
@@ -79,7 +85,8 @@ pub struct GameLogic {
     fret_range: FretRange,
     string_range: StringRange,
     audio_stream: Stream,
-    visualizer: Visualizer,
+    gui_visualizer: GUIVisualizer,
+    console_visualizer: ConsoleVisualizer,
 }
 
 impl GameLogic {
@@ -91,76 +98,154 @@ impl GameLogic {
         string_range: StringRange,
         target_notes: Vec<Note>,
     ) -> Result<GameLogic, GameError> {
-        let (analysis_tx, analysis_rx) = mpsc::channel();
         let analyzer = AudioAnalyzer::new(config.sample_rate.0 as usize, target_notes);
         let xaxis_props = (
             0.0,
             analyzer.n_bins() as f64 / analyzer.delta_f(),
             analyzer.delta_f(),
         );
-        let audio_stream = build_audio_stream(device, config, analyzer, analysis_tx)?;
-        let visualizer = Visualizer::new(analysis_rx, xaxis_props);
+        let (gui_tx, gui_rx) = mpsc::channel();
+        let (console_tx, console_rx) = mpsc::channel();
+        let gui_visualizer = GUIVisualizer::new(gui_rx, xaxis_props);
+        let console_visualizer = ConsoleVisualizer::new(console_rx);
+        let audio_stream = build_data_channels(device, config, analyzer, gui_tx, console_tx)?;
         Ok(GameLogic {
             title,
             fret_range,
             string_range,
             audio_stream,
-            visualizer,
+            gui_visualizer,
+            console_visualizer,
         })
     }
 
+    fn is_running(&self) -> bool {
+        self.gui_visualizer.is_open() && self.console_visualizer.is_open()
+    }
+
     pub fn run(&mut self) -> Result<(), GameError> {
-        println!("Playing device...");
-        // if let Some(note) = analysis.note {
-        //     println!("Detected note: {:?}", note);
-        // }
         self.audio_stream.play()?;
-        self.visualizer.animate();
+        while self.is_running() {
+            self.console_visualizer.draw();
+            self.gui_visualizer.draw();
+            std::thread::sleep(std::time::Duration::from_secs_f64(FRAME_PERIOD));
+        }
         Ok(())
     }
 }
 
-fn build_audio_stream(
+fn build_data_channels(
     device: Device,
     config: StreamConfig,
     mut analyzer: AudioAnalyzer,
-    tx: mpsc::Sender<FrameData>,
+    gui_tx: mpsc::Sender<FrameData>,
+    console_tx: mpsc::Sender<ConsoleData>,
 ) -> Result<Stream, BuildStreamError> {
-    // let buffer_size = match config.buffer_size {
-    //     BufferSize::Fixed(v) => Ok(v),
-    //     BufferSize::Default => Err(BuildStreamError::InvalidArgument),
-    // }? as usize;
-    let mut data_f64 = VecDeque::from(vec![0.0; 1536]);
-    data_f64.shrink_to_fit();
+    let mut audio_buffer = VecDeque::from(vec![0.0f64; MIN_N_SAMPLES_IN_AUDIO_BLOCK]);
+    audio_buffer.shrink_to_fit();
+    let n_channels = config.channels as usize;
+    // TODO: get from user
+    let listened_channel = 0;
     device.build_input_stream(
         &config,
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            for i in 0..data.len() {
-                if i % 2 == 0 {
-                    data_f64.pop_back();
-                    data_f64.push_front(data[i] as f64);
-                }
-            }
-            let analysis = analyzer.identify_note(data_f64.iter().cloned());
-            if let Some(note) = &analysis.note {
-                println!("{:?}", note);
-            }
+            read_channel_buffered(data, n_channels, listened_channel, &mut audio_buffer);
+            let analysis = analyzer.identify_note(audio_buffer.iter().cloned());
+            let console_data = ConsoleData {
+                note: analysis.note.clone(),
+            };
+            console_tx.send(console_data).unwrap();
             let frame_data = FrameData {
                 note: analysis.note,
                 spectrogram: Vec::from(analysis.spectrogram),
             };
-            tx.send(frame_data).unwrap();
+            gui_tx.send(frame_data).unwrap();
         },
         move |_err| {
+            // Mainly happens if we miss some audio frames.
             // println!("Error reading data from device {}", _err);
         },
     )
 }
 
+fn read_channel_buffered(
+    data: &[f32],
+    n_channels: usize,
+    channel: usize,
+    buffer: &mut VecDeque<f64>,
+) {
+    let channel_indices = (channel..data.len()).step_by(n_channels);
+    let n_new_values = channel_indices.len();
+    if n_new_values >= buffer.len() {
+        buffer.clear();
+    } else {
+        for _ in 0..n_new_values {
+            buffer.pop_front();
+        }
+    }
+    for i in channel_indices {
+        buffer.push_back(data[i] as f64);
+    }
+}
+
 #[cfg(test)]
-mod tests {
+mod game_tests {
+    use super::*;
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn read_channel_buffered_empty_buffer_empty_data() {
+        let mut buffer = VecDeque::new();
+        let data = Vec::new();
+        read_channel_buffered(&data, 2, 0, &mut buffer);
+        assert_eq!(0, buffer.len());
+    }
+
+    #[test]
+    fn read_channel_buffered_empty_data() {
+        let mut buffer = VecDeque::from(vec![1.0f64; 64]);
+        let expected = buffer.clone();
+        let data = Vec::new();
+        read_channel_buffered(&data, 3, 1, &mut buffer);
+        assert_eq!(expected, buffer);
+    }
+
+    #[test]
+    fn read_channel_buffered_empty_buffer() {
+        let mut buffer = VecDeque::new();
+        let data: Vec<f32> = (0..100).map(|x| x as f32).collect();
+        let expected: VecDeque<f64> = data.iter().cloned().step_by(2).map(|x| x as f64).collect();
+        read_channel_buffered(&data, 2, 0, &mut buffer);
+        assert_eq!(expected, buffer);
+    }
+
+    #[test]
+    fn read_channel_buffered_less_data_than_buffer() {
+        let mut buffer = VecDeque::from(vec![5000.0f64; 200]);
+        let data: Vec<f32> = (0..100).map(|x| x as f32).collect();
+        let expected: VecDeque<f64> = buffer
+            .iter()
+            .cloned()
+            .skip(50)
+            .chain(data.iter().cloned().step_by(2).map(|x| x as f64))
+            .collect();
+        read_channel_buffered(&data, 2, 0, &mut buffer);
+        assert_eq!(expected, buffer);
+    }
+
+    #[test]
+    fn read_channel_buffered_same_data_as_buffer() {
+        let mut buffer = VecDeque::from(vec![5000.0f64; 200]);
+        let data: Vec<f32> = (0..200).map(|x| x as f32).collect();
+        let expected: VecDeque<f64> = data.iter().cloned().map(|x| x as f64).collect();
+        read_channel_buffered(&data, 1, 0, &mut buffer);
+        assert_eq!(expected, buffer);
+    }
+
+    #[test]
+    fn read_channel_buffered_more_data_than_buffer() {
+        let mut buffer = VecDeque::from(vec![5000.0f64; 50]);
+        let data: Vec<f32> = (0..200).map(|x| x as f32).collect();
+        let expected: VecDeque<f64> = data.iter().cloned().map(|x| x as f64).collect();
+        read_channel_buffered(&data, 1, 0, &mut buffer);
+        assert_eq!(expected, buffer);
     }
 }
