@@ -1,6 +1,5 @@
 use crate::note::Note;
 
-pub struct AnalysisResult<'a> {
+pub struct AnalysisResult {
     pub note: Option<Note>,
-    pub spectrogram: &'a [f64],
 }
