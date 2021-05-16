@@ -1,5 +1,9 @@
+mod console_data;
+mod console_visualizer;
 mod frame_data;
-mod visualizer;
+mod gui_visualizer;
 
+pub use console_data::ConsoleData;
+pub use console_visualizer::ConsoleVisualizer;
 pub use frame_data::FrameData;
-pub use visualizer::Visualizer;
+pub use gui_visualizer::GUIVisualizer;
