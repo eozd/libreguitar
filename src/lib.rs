@@ -4,22 +4,29 @@ mod note;
 mod visualization;
 
 use crate::game::{FretRange, GameError, GameLogic, StringRange};
-use crate::note::parse_freq_csv;
+use crate::note::{NoteRegistry, Tuning};
 
 use cpal::Device;
 use cpal::StreamConfig;
 
 const GAME_TITLE: &str = "FRETBOARD TRAINER";
 
-pub fn run(device: Device, config: StreamConfig, freq_csv_path: &str) -> Result<(), GameError> {
-    let note_vec = parse_freq_csv(freq_csv_path)?;
+pub fn run(
+    device: Device,
+    config: StreamConfig,
+    notes_csv_path: &str,
+    tuning_csv_path: &str,
+) -> Result<(), GameError> {
+    let notes = NoteRegistry::from_csv(notes_csv_path)?;
+    let tuning = Tuning::from_csv(tuning_csv_path, &notes)?;
     let mut game = GameLogic::new(
         device,
         config,
         String::from(GAME_TITLE),
-        FretRange::new(0, 12),
+        FretRange::new(0, 24),
         StringRange::new(1, 6 + 1),
-        note_vec,
+        notes,
+        tuning,
     )?;
     game.run()
 }

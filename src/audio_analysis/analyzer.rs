@@ -19,13 +19,13 @@ pub struct AudioAnalyzer {
 }
 
 impl AudioAnalyzer {
-    pub fn new(sample_rate: usize, target_notes: Vec<Note>) -> AudioAnalyzer {
+    pub fn new(sample_rate: usize, target_notes: &Vec<Note>) -> AudioAnalyzer {
         assert!(
             target_notes.len() > 1,
             "Need at least two notes for analysis."
         );
 
-        let target_notes = TargetNotes::new(target_notes);
+        let target_notes = TargetNotes::new(target_notes.clone());
         let min_freq_diff = target_notes.resolution();
         let delta_f = min_freq_diff / 2.0;
         let fftsize = (sample_rate as f64 / delta_f).ceil() as usize;

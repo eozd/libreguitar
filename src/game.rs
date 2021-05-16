@@ -1,8 +1,9 @@
 use crate::audio_analysis::AudioAnalyzer;
-use crate::note::Note;
+use crate::note::{Note, NoteRegistry, Tuning};
 use crate::visualization::{ConsoleData, ConsoleVisualizer, FrameData, GUIVisualizer};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::error::Error;
+use std::fmt;
 use std::sync::mpsc;
 use thiserror::Error;
 
@@ -80,10 +81,56 @@ impl StringRange {
     }
 }
 
+#[derive(Debug)]
+struct ConfigurationError(String);
+impl fmt::Display for ConfigurationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ConfigurationError: {}", self.0)
+    }
+}
+impl Error for ConfigurationError {}
+
+struct ActiveNotes {
+    notes: HashMap<(usize, usize), Note>,
+}
+
+impl ActiveNotes {
+    fn new(
+        registry: &NoteRegistry,
+        tuning: &Tuning,
+        string_range: &StringRange,
+        fret_range: &FretRange,
+    ) -> ActiveNotes {
+        let mut notes = HashMap::new();
+        for string_idx in string_range.beg_string..string_range.end_string {
+            // TODO: read fret ranges while considering the tuning
+            // TODO: read fret ranges while considering the tuning
+            let open_note = tuning.note(string_idx);
+            let mut note_iter = registry.iter_from(&open_note).skip(fret_range.beg_fret);
+            for fret_idx in fret_range.beg_fret..fret_range.end_fret {
+                match note_iter.next() {
+                    Some(curr_note) => {
+                        notes.insert((string_idx, fret_idx), curr_note.clone());
+                    }
+                    None => {
+                        // TODO: use logging library
+                        println!("Note on string {} fret {} does not exist in frequency list. Skipping...", string_idx, fret_idx);
+                    }
+                }
+            }
+        }
+
+        ActiveNotes { notes }
+    }
+}
+
 pub struct GameLogic {
     title: String,
     fret_range: FretRange,
     string_range: StringRange,
+    note_registry: NoteRegistry,
+    tuning: Tuning,
+    active_notes: ActiveNotes,
     audio_stream: Stream,
     gui_visualizer: GUIVisualizer,
     console_visualizer: ConsoleVisualizer,
@@ -96,9 +143,10 @@ impl GameLogic {
         title: String,
         fret_range: FretRange,
         string_range: StringRange,
-        target_notes: Vec<Note>,
+        note_registry: NoteRegistry,
+        tuning: Tuning,
     ) -> Result<GameLogic, GameError> {
-        let analyzer = AudioAnalyzer::new(config.sample_rate.0 as usize, target_notes);
+        let analyzer = AudioAnalyzer::new(config.sample_rate.0 as usize, note_registry.notes());
         let xaxis_props = (
             0.0,
             analyzer.n_bins() as f64 / analyzer.delta_f(),
@@ -109,10 +157,14 @@ impl GameLogic {
         let gui_visualizer = GUIVisualizer::new(gui_rx, xaxis_props);
         let console_visualizer = ConsoleVisualizer::new(console_rx);
         let audio_stream = build_data_channels(device, config, analyzer, gui_tx, console_tx)?;
+        let active_notes = ActiveNotes::new(&note_registry, &tuning, &string_range, &fret_range);
         Ok(GameLogic {
             title,
             fret_range,
             string_range,
+            note_registry,
+            tuning,
+            active_notes,
             audio_stream,
             gui_visualizer,
             console_visualizer,
