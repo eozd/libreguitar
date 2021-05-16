@@ -80,6 +80,10 @@ impl AudioAnalyzer {
         }
     }
 
+    pub fn spectrogram(&self) -> &Vec<f64> {
+        &self.freq_magnitudes
+    }
+
     pub fn identify_note(
         &mut self,
         audio_data: impl ExactSizeIterator<Item = f64>,
@@ -87,9 +91,6 @@ impl AudioAnalyzer {
         self.compute_fft(audio_data);
         moving_avg(&mut self.freq_magnitudes[..], 11);
         let note = find_note(&self.freq_magnitudes, self.delta_f, &self.target_notes);
-        AnalysisResult {
-            note: note,
-            spectrogram: &self.freq_magnitudes,
-        }
+        AnalysisResult { note: note }
     }
 }

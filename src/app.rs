@@ -1,9 +1,10 @@
-use crate::audio_analysis::AudioAnalyzer;
-use crate::note::{Note, NoteRegistry, Tuning};
-use crate::visualization::{ConsoleData, ConsoleVisualizer, FrameData, GUIVisualizer};
-use std::collections::{HashMap, VecDeque};
+use crate::audio_analysis::{AnalysisResult, AudioAnalyzer};
+use crate::game_logic::{FretRange, StringRange};
+use crate::game_logic::{GameError, GameLogic};
+use crate::note::{NoteRegistry, Tuning};
+use crate::visualization::{ConsoleVisualizer, FrameData, GUIVisualizer};
+use std::collections::VecDeque;
 use std::error::Error;
-use std::fmt;
 use std::sync::mpsc;
 use thiserror::Error;
 
@@ -14,9 +15,6 @@ use cpal::Device;
 use cpal::Stream;
 use cpal::StreamConfig;
 
-// TODO: get these from user
-const MAX_FRETS: usize = 24;
-const MAX_STRINGS: usize = 6;
 const FRAME_RATE: f64 = 30.0;
 const FRAME_PERIOD: f64 = 1.0 / FRAME_RATE;
 // Increasing this value further would cause latency in real time frequency detection.
@@ -26,126 +24,33 @@ const FRAME_PERIOD: f64 = 1.0 / FRAME_RATE;
 const MIN_N_SAMPLES_IN_AUDIO_BLOCK: usize = 2048;
 
 #[derive(Error, Debug)]
-pub enum GameError {
+pub enum AppError {
     #[error(transparent)]
     BuildStreamError(#[from] cpal::BuildStreamError),
     #[error(transparent)]
     PlayStreamError(#[from] cpal::PlayStreamError),
     #[error(transparent)]
+    GameError(#[from] GameError),
+    #[error(transparent)]
     UnknownError(#[from] Box<dyn Error>),
 }
 
-pub struct FretRange {
-    beg_fret: usize,
-    end_fret: usize,
-}
-
-impl FretRange {
-    pub fn new(beg_fret: usize, end_fret: usize) -> FretRange {
-        assert!(
-            beg_fret <= MAX_FRETS && end_fret <= MAX_FRETS + 1,
-            "Maximum {} fret guitars are supported.",
-            MAX_FRETS
-        );
-        assert!(
-            beg_fret < end_fret,
-            "Fret range must include at least one fret."
-        );
-
-        FretRange { beg_fret, end_fret }
-    }
-}
-
-pub struct StringRange {
-    beg_string: usize,
-    end_string: usize,
-}
-
-impl StringRange {
-    pub fn new(beg_string: usize, end_string: usize) -> StringRange {
-        assert!(
-            beg_string <= MAX_STRINGS && end_string <= MAX_STRINGS + 1,
-            "Maximum {} string guitars are supported.",
-            MAX_STRINGS
-        );
-        assert!(beg_string >= 1);
-        assert!(
-            beg_string < end_string,
-            "String range must include at least one string."
-        );
-
-        StringRange {
-            beg_string,
-            end_string,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ConfigurationError(String);
-impl fmt::Display for ConfigurationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ConfigurationError: {}", self.0)
-    }
-}
-impl Error for ConfigurationError {}
-
-struct ActiveNotes {
-    notes: HashMap<(usize, usize), Note>,
-}
-
-impl ActiveNotes {
-    fn new(
-        registry: &NoteRegistry,
-        tuning: &Tuning,
-        string_range: &StringRange,
-        fret_range: &FretRange,
-    ) -> ActiveNotes {
-        let mut notes = HashMap::new();
-        for string_idx in string_range.beg_string..string_range.end_string {
-            // TODO: read fret ranges while considering the tuning
-            // TODO: read fret ranges while considering the tuning
-            let open_note = tuning.note(string_idx);
-            let mut note_iter = registry.iter_from(&open_note).skip(fret_range.beg_fret);
-            for fret_idx in fret_range.beg_fret..fret_range.end_fret {
-                match note_iter.next() {
-                    Some(curr_note) => {
-                        notes.insert((string_idx, fret_idx), curr_note.clone());
-                    }
-                    None => {
-                        // TODO: use logging library
-                        println!("Note on string {} fret {} does not exist in frequency list. Skipping...", string_idx, fret_idx);
-                    }
-                }
-            }
-        }
-
-        ActiveNotes { notes }
-    }
-}
-
-pub struct GameLogic {
-    title: String,
-    fret_range: FretRange,
-    string_range: StringRange,
-    note_registry: NoteRegistry,
-    tuning: Tuning,
-    active_notes: ActiveNotes,
+pub struct App {
     audio_stream: Stream,
     gui_visualizer: GUIVisualizer,
     console_visualizer: ConsoleVisualizer,
+    game_logic: GameLogic,
 }
 
-impl GameLogic {
+impl App {
     pub fn new(
         device: Device,
         config: StreamConfig,
-        title: String,
         fret_range: FretRange,
         string_range: StringRange,
         note_registry: NoteRegistry,
         tuning: Tuning,
-    ) -> Result<GameLogic, GameError> {
+    ) -> Result<App, AppError> {
         let analyzer = AudioAnalyzer::new(config.sample_rate.0 as usize, note_registry.notes());
         let xaxis_props = (
             0.0,
@@ -153,21 +58,25 @@ impl GameLogic {
             analyzer.delta_f(),
         );
         let (gui_tx, gui_rx) = mpsc::channel();
+        let (analysis_tx, analysis_rx) = mpsc::channel();
         let (console_tx, console_rx) = mpsc::channel();
         let gui_visualizer = GUIVisualizer::new(gui_rx, xaxis_props);
         let console_visualizer = ConsoleVisualizer::new(console_rx);
-        let audio_stream = build_data_channels(device, config, analyzer, gui_tx, console_tx)?;
-        let active_notes = ActiveNotes::new(&note_registry, &tuning, &string_range, &fret_range);
-        Ok(GameLogic {
-            title,
-            fret_range,
-            string_range,
+        let audio_stream =
+            build_connection_protocols(device, config, analyzer, gui_tx, analysis_tx)?;
+        let game_logic = GameLogic::new(
+            analysis_rx,
+            vec![console_tx],
             note_registry,
             tuning,
-            active_notes,
+            string_range,
+            fret_range,
+        );
+        Ok(App {
             audio_stream,
             gui_visualizer,
             console_visualizer,
+            game_logic,
         })
     }
 
@@ -175,8 +84,9 @@ impl GameLogic {
         self.gui_visualizer.is_open() && self.console_visualizer.is_open()
     }
 
-    pub fn run(&mut self) -> Result<(), GameError> {
+    pub fn run(&mut self) -> Result<(), AppError> {
         self.audio_stream.play()?;
+        self.game_logic.play()?;
         while self.is_running() {
             self.console_visualizer.draw();
             self.gui_visualizer.draw();
@@ -186,12 +96,12 @@ impl GameLogic {
     }
 }
 
-fn build_data_channels(
+fn build_connection_protocols(
     device: Device,
     config: StreamConfig,
     mut analyzer: AudioAnalyzer,
     gui_tx: mpsc::Sender<FrameData>,
-    console_tx: mpsc::Sender<ConsoleData>,
+    analysis_tx: mpsc::Sender<AnalysisResult>,
 ) -> Result<Stream, BuildStreamError> {
     let mut audio_buffer = VecDeque::from(vec![0.0f64; MIN_N_SAMPLES_IN_AUDIO_BLOCK]);
     audio_buffer.shrink_to_fit();
@@ -203,13 +113,11 @@ fn build_data_channels(
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
             read_channel_buffered(data, n_channels, listened_channel, &mut audio_buffer);
             let analysis = analyzer.identify_note(audio_buffer.iter().cloned());
-            let console_data = ConsoleData {
-                note: analysis.note.clone(),
-            };
-            console_tx.send(console_data).unwrap();
+            // send data to game logic
+            analysis_tx.send(analysis).unwrap();
+            // send data to GUI
             let frame_data = FrameData {
-                note: analysis.note,
-                spectrogram: Vec::from(analysis.spectrogram),
+                spectrogram: Vec::from(analyzer.spectrogram().clone()),
             };
             gui_tx.send(frame_data).unwrap();
         },

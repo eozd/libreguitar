@@ -1,7 +1,6 @@
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 
@@ -127,10 +126,6 @@ impl NoteRegistry {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Note> {
-        self.notes().iter()
-    }
-
     pub fn iter_from<'a>(&'a self, starting_note: &'a Note) -> impl Iterator<Item = &'a Note> {
         if let Ok(idx) = self.notes.binary_search(starting_note) {
             self.notes.iter().skip(idx)
@@ -180,12 +175,14 @@ impl Tuning {
         Ok(Tuning { values: map })
     }
 
-    pub fn n_strings(&self) -> usize {
-        self.values.len()
-    }
-
     pub fn note(&self, string_idx: usize) -> &Note {
-        assert!(string_idx > 0 && string_idx <= self.values.len());
+        assert!(
+            string_idx > 0 && string_idx <= self.values.len(),
+            "Guitar string index {} is out of bounds ({}, {})",
+            string_idx,
+            1,
+            self.values.len() + 1
+        );
         &self.values[string_idx - 1]
     }
 }
