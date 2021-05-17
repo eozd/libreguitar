@@ -16,6 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: System Dependencies
+      run: sudo apt-get install libasound2-dev libjack-dev libjack0 fontconfig
     - name: Build
       run: cargo build --verbose
     - name: Run tests
