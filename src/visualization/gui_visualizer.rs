@@ -86,12 +86,12 @@ impl GUIVisualizer {
     }
 
     pub fn is_open(&self) -> bool {
-        return self.window.is_open() && !self.window.is_key_down(Key::Escape);
+        self.window.is_open() && !self.window.is_key_down(Key::Escape)
     }
 
     pub fn draw(&mut self) {
         let packet = self.rx.try_iter().last();
-        if let None = packet {
+        if packet.is_none() {
             return;
         }
         let arr = packet.unwrap().spectrogram;

@@ -15,8 +15,7 @@ pub fn find_note(freq_spectrum: &[f64], delta_f: f64, target_notes: &TargetNotes
         .take(5)
         .map(|p| {
             let freq = (p.idx as f64) * delta_f;
-            let note = target_notes.get_closest(freq);
-            note
+            target_notes.get_closest(freq)
         })
         .collect();
     let top_notenames = top_notes.iter().map(|note| &note.name);
@@ -78,10 +77,10 @@ fn find_peaks(
     for i in 0..n_samples {
         let greater_than_left = i == 0 || signal[i] > signal[i - 1];
         let greater_than_right = i == n_samples - 1 || signal[i] > signal[i + 1];
-        if greater_than_left && greater_than_right && signal[i] >= min_height {
-            if out.is_empty() || i - out[out.len() - 1].idx >= min_peak_dist {
-                out.push(Peak::new(i, signal[i]));
-            }
+        let is_peak = greater_than_left && greater_than_right && signal[i] >= min_height;
+        let is_far_apart = out.is_empty() || i - out[out.len() - 1].idx >= min_peak_dist;
+        if is_peak && is_far_apart {
+            out.push(Peak::new(i, signal[i]));
         }
     }
     out
@@ -92,7 +91,7 @@ pub fn moving_avg(signal: &mut [f64], window_size: usize) {
         window_size > 0,
         "Moving avg for zero window size is undefined."
     );
-    if signal.len() == 0 || window_size == 1 {
+    if signal.is_empty() || window_size == 1 {
         return;
     }
     let mut cumsum = vec![0.0f64; signal.len()];

@@ -9,9 +9,9 @@ where
     R: std::io::Read,
     T: DeserializeOwned,
 {
-    let mut iter = rdr.deserialize();
+    let iter = rdr.deserialize();
     let mut out = Vec::new();
-    while let Some(result) = iter.next() {
+    for result in iter {
         out.push(result?);
     }
     Ok(out)
@@ -116,7 +116,7 @@ impl NoteRegistry {
     pub fn get(&self, note_name: NoteName, octave: usize) -> Option<&Note> {
         let query_note = Note {
             name: note_name,
-            octave: octave,
+            octave,
             frequency: 0.0,
         };
         if let Ok(idx) = self.notes.binary_search(&query_note) {
@@ -162,12 +162,12 @@ impl Tuning {
             if let Some(note) = note_registry.get(row.name, row.octave) {
                 map.push(note.clone());
             } else {
-                return Err(Box::new(InvalidTuningError(format!(
+                return Err(Box::new(InvalidTuningError(String::from(
                     "Tuning specification contains a note not given in note frequency list",
                 ))));
             }
         }
-        if map.len() == 0 {
+        if map.is_empty() {
             return Err(Box::new(InvalidTuningError(String::from(
                 "Tuning specification needs at least one string",
             ))));
