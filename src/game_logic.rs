@@ -1,7 +1,6 @@
 use crate::audio_analysis::AnalysisResult;
 use crate::game_state::GameState;
 use crate::note::{Note, NoteRegistry, Tuning};
-use rand;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -26,7 +25,7 @@ impl Error for GameError {}
 
 enum ThreadCtrl {
     Start,
-    Stop,
+    // Stop,
 }
 
 pub struct GameLogic {
@@ -59,9 +58,9 @@ impl GameLogic {
             wait_until_start(&ctrl_rx).unwrap();
             let mut rng = rand::thread_rng();
             loop {
-                if let Ok(ThreadCtrl::Stop) = ctrl_rx.try_recv() {
-                    wait_until_start(&ctrl_rx).unwrap();
-                }
+                // if let Ok(ThreadCtrl::Stop) = ctrl_rx.try_recv() {
+                //     wait_until_start(&ctrl_rx).unwrap();
+                // }
                 let target_note = pick_note(&active_notes, &mut rng);
                 let state = GameState {
                     target_note: target_note.clone(),
@@ -86,14 +85,14 @@ impl GameLogic {
     pub fn play(&mut self) -> Result<(), GameError> {
         self.ctrl_tx
             .send(ThreadCtrl::Start)
-            .or_else(|_| Err(GameError(String::from("Could not start thread"))))
+            .map_err(|_| GameError(String::from("Could not start thread")))
     }
 
-    pub fn pause(&mut self) -> Result<(), GameError> {
-        self.ctrl_tx
-            .send(ThreadCtrl::Stop)
-            .or_else(|_| Err(GameError(String::from("Could not stop thread"))))
-    }
+    // pub fn pause(&mut self) -> Result<(), GameError> {
+    //     self.ctrl_tx
+    //         .send(ThreadCtrl::Stop)
+    //         .map_err(|_| GameError(String::from("Could not stop thread")))
+    // }
 }
 
 fn pick_note<'a>(notes: &'a ActiveNotes, rng: &mut impl rand::Rng) -> &'a Note {

@@ -117,7 +117,7 @@ fn build_connection_protocols(
             analysis_tx.send(analysis).unwrap();
             // send data to GUI
             let frame_data = FrameData {
-                spectrogram: Vec::from(analyzer.spectrogram().clone()),
+                spectrogram: analyzer.spectrogram().clone(),
             };
             gui_tx.send(frame_data).unwrap();
         },
