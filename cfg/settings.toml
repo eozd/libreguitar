@@ -1,0 +1,32 @@
+[app]
+fps = 30.0
+frequencies_path = "resources/guitar_frequencies.csv"
+tuning_path = "resources/tuning.csv"
+
+[gui]
+width = 1280
+height = 960
+spectrum_max_freq = 2000.0
+spectrum_max_magnitude = 0.01
+font_name = "sans-serif"
+font_size = 15
+font_color = [0, 255, 0]
+axis_color = [0, 255, 0]
+background_color = [0, 0, 0]
+line_color = [0, 255, 0]
+
+[audio_analysis]
+block_size = 2048
+fft_res_factor = 2.0
+fft_magnitude_gain = 10.0
+peak_threshold = 500
+min_peak_dist = 10
+num_top_peaks = 5
+moving_avg_window_size = 11
+
+[game]
+fret_range = [0, 12]
+string_range = [1, 7]
+max_frets = 24
+max_strings = 6
+note_count_for_acceptance = 50

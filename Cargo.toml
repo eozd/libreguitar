@@ -14,6 +14,7 @@ cpal = { version = "0.13.3", features = ["jack"] }
 csv = "1.1"
 rand = "0.8"
 serde = { version = "1", features = ["derive"]}
+config = "0.11"
 statrs = "0.13"
 minifb = "0.13"
 plotters = { version = "0.3", default_features = false, features = ["ttf", "line_series"] }
