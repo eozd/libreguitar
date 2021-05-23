@@ -436,24 +436,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fb-trainer"
-version = "0.1.0"
-dependencies = [
- "config",
- "cpal",
- "csv",
- "minifb",
- "plotters",
- "plotters-bitmap",
- "rand 0.8.3",
- "realfft",
- "rustfft",
- "serde 1.0.125",
- "statrs",
- "thiserror",
-]
-
-[[package]]
 name = "filetime"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -714,6 +696,24 @@ name = "libm"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
+
+[[package]]
+name = "libreguitar"
+version = "0.1.0"
+dependencies = [
+ "config",
+ "cpal",
+ "csv",
+ "minifb",
+ "plotters",
+ "plotters-bitmap",
+ "rand 0.8.3",
+ "realfft",
+ "rustfft",
+ "serde 1.0.125",
+ "statrs",
+ "thiserror",
+]
 
 [[package]]
 name = "linked-hash-map"

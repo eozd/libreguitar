@@ -27,6 +27,8 @@ enum ThreadCtrl {
 
 pub struct GameLogic {
     ctrl_tx: mpsc::Sender<ThreadCtrl>,
+    fret_range: FretRange,
+    string_range: StringRange,
 }
 
 fn wait_until_start(rx: &mpsc::Receiver<ThreadCtrl>) -> Result<(), mpsc::RecvError> {
@@ -50,7 +52,12 @@ impl GameLogic {
     ) -> GameLogic {
         let fret_range = FretRange::new(config.fret_range.0, config.fret_range.1);
         let string_range = StringRange::new(config.string_range.0, config.string_range.1);
-        let active_notes = ActiveNotes::new(&note_registry, &tuning, string_range, fret_range);
+        let active_notes = ActiveNotes::new(
+            &note_registry,
+            &tuning,
+            string_range.clone(),
+            fret_range.clone(),
+        );
         let (ctrl_tx, ctrl_rx) = mpsc::channel();
         thread::spawn(move || {
             wait_until_start(&ctrl_rx).unwrap();
@@ -77,7 +84,19 @@ impl GameLogic {
                 }
             }
         });
-        GameLogic { ctrl_tx }
+        GameLogic {
+            ctrl_tx,
+            fret_range,
+            string_range,
+        }
+    }
+
+    pub fn fret_range(&self) -> &FretRange {
+        &self.fret_range
+    }
+
+    pub fn string_range(&self) -> &StringRange {
+        &self.string_range
     }
 
     pub fn play(&mut self) -> Result<(), GameError> {
@@ -100,6 +119,7 @@ fn pick_note<'a>(notes: &'a ActiveNotes, rng: &mut impl rand::Rng) -> &'a Note {
     notes.notes.get(&key).unwrap()
 }
 
+#[derive(Clone)]
 pub struct FretRange {
     range: Range<usize>,
 }
@@ -121,6 +141,7 @@ impl FretRange {
     }
 }
 
+#[derive(Clone)]
 pub struct StringRange {
     range: Range<usize>,
 }
