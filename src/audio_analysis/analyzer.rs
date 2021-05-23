@@ -2,6 +2,7 @@ use crate::audio_analysis::algorithm::{find_note, moving_avg};
 use crate::audio_analysis::analysis_result::AnalysisResult;
 use crate::audio_analysis::target_notes::TargetNotes;
 use crate::note::Note;
+use crate::AudioCfg;
 use realfft::{num_complex::Complex, RealFftPlanner, RealToComplex};
 use std::f64;
 use std::sync::Arc;
@@ -16,10 +17,11 @@ pub struct AudioAnalyzer {
     n_bins: usize,
     delta_f: f64,
     target_notes: TargetNotes,
+    audio_cfg: AudioCfg,
 }
 
 impl AudioAnalyzer {
-    pub fn new(sample_rate: usize, target_notes: &[Note]) -> AudioAnalyzer {
+    pub fn new(sample_rate: usize, target_notes: &[Note], audio_cfg: AudioCfg) -> AudioAnalyzer {
         assert!(
             target_notes.len() > 1,
             "Need at least two notes for analysis."
@@ -27,7 +29,7 @@ impl AudioAnalyzer {
 
         let target_notes = TargetNotes::new(Vec::from(target_notes));
         let min_freq_diff = target_notes.resolution();
-        let delta_f = min_freq_diff / 2.0;
+        let delta_f = min_freq_diff / audio_cfg.fft_res_factor;
         let fftsize = (sample_rate as f64 / delta_f).ceil() as usize;
 
         let mut planner = RealFftPlanner::<f64>::new();
@@ -47,6 +49,7 @@ impl AudioAnalyzer {
             n_bins,
             delta_f,
             target_notes,
+            audio_cfg,
         }
     }
 
@@ -74,7 +77,7 @@ impl AudioAnalyzer {
                 &mut self.fft_scratch,
             )
             .unwrap();
-        let norm_factor = 10.0 / (self.fftsize as f64);
+        let norm_factor = self.audio_cfg.fft_magnitude_gain / (self.fftsize as f64);
         for i in 0..self.n_bins {
             self.freq_magnitudes[i] = self.spectrogram[i].norm() * norm_factor;
         }
@@ -89,8 +92,18 @@ impl AudioAnalyzer {
         audio_data: impl ExactSizeIterator<Item = f64>,
     ) -> AnalysisResult {
         self.compute_fft(audio_data);
-        moving_avg(&mut self.freq_magnitudes[..], 11);
-        let note = find_note(&self.freq_magnitudes, self.delta_f, &self.target_notes);
+        moving_avg(
+            &mut self.freq_magnitudes[..],
+            self.audio_cfg.moving_avg_window_size,
+        );
+        let note = find_note(
+            &self.freq_magnitudes,
+            self.delta_f,
+            &self.target_notes,
+            self.audio_cfg.peak_threshold,
+            self.audio_cfg.min_peak_dist,
+            self.audio_cfg.num_top_peaks,
+        );
         AnalysisResult { note }
     }
 }

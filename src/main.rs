@@ -10,10 +10,9 @@ use cpal::Host;
 use cpal::SampleRate;
 use cpal::StreamConfig;
 
-use fretboard_trainer::run;
+use fb_trainer::{run, Cfg};
 
-const NOTES_CSV_PATH: &str = "resources/guitar_frequencies.csv";
-const TUNING_CSV_PATH: &str = "resources/tuning.csv";
+const APP_CONFIG_PATH: &str = "cfg/settings.toml";
 
 fn choose_via_user_input<T>(title_str: &str, options: Vec<T>) -> io::Result<usize>
 where
@@ -69,7 +68,7 @@ fn choose_device(host: &Host) -> Device {
         .expect("Fatal error: User chose a device outside the range")
 }
 
-fn choose_config(_device: &Device) -> StreamConfig {
+fn choose_device_config(_device: &Device) -> StreamConfig {
     // let supconfig = device.default_input_config().expect("No default config");
     // let config = supconfig.config();
     // TODO: choose from user
@@ -81,14 +80,17 @@ fn choose_config(_device: &Device) -> StreamConfig {
 }
 
 fn main() {
+    let app_config = Cfg::new(APP_CONFIG_PATH).unwrap();
+    println!("Using app config at {}", APP_CONFIG_PATH);
+
     let host = choose_host();
     println!("Using host {}", host.id().name());
 
     let device = choose_device(&host);
     println!("Using device {}", device.name().unwrap());
 
-    let config = choose_config(&device);
-    println!("Using config {:?}", config);
+    let device_config = choose_device_config(&device);
+    println!("Using device config {:?}", device_config);
 
-    run(device, config, NOTES_CSV_PATH, TUNING_CSV_PATH).unwrap();
+    run(device, device_config, app_config).unwrap();
 }
