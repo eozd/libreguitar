@@ -1,17 +1,16 @@
 // DISCLAIMER: Major parts of the frame handling in this file is adapted
 // from https://github.com/38/plotters/blob/master/examples/minifb-demo/src/main.rs
 use crate::visualization::FrameData;
+use crate::GuiCfg;
 use minifb::{Key, Window, WindowOptions};
 use plotters::chart::ChartState;
 use plotters::coord::types::RangedCoordf64;
 use plotters::prelude::*;
+use plotters::style::RGBAColor;
 use plotters_bitmap::bitmap_pixel::BGRXPixel;
 use plotters_bitmap::BitMapBackend;
 use std::borrow::{Borrow, BorrowMut};
 use std::sync::mpsc;
-
-const W: usize = 1280;
-const H: usize = 960;
 
 struct BufferWrapper(Vec<u32>);
 impl Borrow<[u8]> for BufferWrapper {
@@ -39,38 +38,60 @@ impl BorrowMut<[u32]> for BufferWrapper {
     }
 }
 
+fn color_from_tup(rgb: (u8, u8, u8, u8)) -> RGBAColor {
+    let alpha = rgb.3 as f64 / 255.0;
+    RGBColor(rgb.0, rgb.1, rgb.2).mix(alpha)
+}
+
 pub struct GUIVisualizer {
     window: minifb::Window,
     buf: BufferWrapper,
     cs: ChartState<Cartesian2d<RangedCoordf64, RangedCoordf64>>,
     xaxis: Vec<f64>,
     rx: mpsc::Receiver<FrameData>,
+    gui_cfg: GuiCfg,
+    background_color: RGBAColor,
+    line_color: RGBAColor,
 }
 
 impl GUIVisualizer {
-    pub fn new(rx: mpsc::Receiver<FrameData>, xaxis_props: (f64, f64, f64)) -> GUIVisualizer {
-        let mut buf = BufferWrapper(vec![0u32; W * H]);
+    pub fn new(
+        rx: mpsc::Receiver<FrameData>,
+        xaxis_props: (f64, f64, f64),
+        gui_cfg: GuiCfg,
+    ) -> GUIVisualizer {
+        let w = gui_cfg.width;
+        let h = gui_cfg.height;
+        let font_color = color_from_tup(gui_cfg.font_color);
+        let axis_color = color_from_tup(gui_cfg.axis_color);
+        let background_color = color_from_tup(gui_cfg.background_color);
+        let line_color = color_from_tup(gui_cfg.line_color);
+        let mut buf = BufferWrapper(vec![0u32; w * h]);
 
-        let window = Window::new("Default Plotter Window", W, H, WindowOptions::default()).unwrap();
+        let window = Window::new("Default Plotter Window", w, h, WindowOptions::default()).unwrap();
         let root = BitMapBackend::<BGRXPixel>::with_buffer_and_format(
             buf.borrow_mut(),
-            (W as u32, H as u32),
+            (w as u32, h as u32),
         )
         .unwrap()
         .into_drawing_area();
-        root.fill(&BLACK).unwrap();
+        root.fill(&background_color).unwrap();
 
         let (beg, end, step) = xaxis_props;
         let mut chart = ChartBuilder::on(&root)
-            .margin(10)
-            .set_all_label_area_size(30)
-            .build_cartesian_2d(beg..2000.0, 0.0..0.01)
+            .margin(gui_cfg.margin_size)
+            .set_all_label_area_size(gui_cfg.label_area_size)
+            .build_cartesian_2d(
+                beg..gui_cfg.spectrum_max_freq,
+                0.0..gui_cfg.spectrum_max_magnitude,
+            )
             .unwrap();
 
+        let fonttup = (&gui_cfg.font_name[..], gui_cfg.font_size);
         chart
             .configure_mesh()
-            .label_style(("sans-serif", 15).into_font().color(&GREEN))
-            .axis_style(&GREEN)
+            .label_style(fonttup.into_font().color(&font_color))
+            .axis_style(&axis_color)
             .draw()
             .unwrap();
 
@@ -82,6 +103,9 @@ impl GUIVisualizer {
             cs,
             xaxis: (beg..end).step(step).values().collect(),
             rx,
+            gui_cfg,
+            background_color,
+            line_color,
         }
     }
 
@@ -97,22 +121,24 @@ impl GUIVisualizer {
         let arr = packet.unwrap().spectrogram;
         let root = BitMapBackend::<BGRXPixel>::with_buffer_and_format(
             self.buf.borrow_mut(),
-            (W as u32, H as u32),
+            (self.gui_cfg.width as u32, self.gui_cfg.height as u32),
         )
         .unwrap()
         .into_drawing_area();
         let mut chart = self.cs.clone().restore(&root);
-        chart.plotting_area().fill(&BLACK).unwrap();
+        chart.plotting_area().fill(&self.background_color).unwrap();
 
         chart
             .configure_mesh()
-            .bold_line_style(&GREEN.mix(0.2))
+            .bold_line_style(&self.line_color)
             .light_line_style(&TRANSPARENT)
             .draw()
             .unwrap();
 
         let data = self.xaxis.iter().cloned().zip(arr.iter().cloned());
-        chart.draw_series(LineSeries::new(data, &GREEN)).unwrap();
+        chart
+            .draw_series(LineSeries::new(data, &self.line_color))
+            .unwrap();
 
         drop(root);
         drop(chart);

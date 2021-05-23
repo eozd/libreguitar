@@ -1,16 +1,13 @@
 use crate::audio_analysis::AnalysisResult;
 use crate::game_state::GameState;
 use crate::note::{Note, NoteRegistry, Tuning};
+use crate::GameCfg;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
 use std::sync::mpsc;
 use std::thread;
-
-// TODO: get these from user
-const MAX_FRETS: usize = 24;
-const MAX_STRINGS: usize = 6;
 
 #[derive(Debug)]
 pub struct GameError(String);
@@ -49,9 +46,10 @@ impl GameLogic {
         tx_vec: Vec<mpsc::Sender<GameState>>,
         note_registry: NoteRegistry,
         tuning: Tuning,
-        string_range: StringRange,
-        fret_range: FretRange,
+        config: GameCfg,
     ) -> GameLogic {
+        let fret_range = FretRange::new(config.fret_range.0, config.fret_range.1);
+        let string_range = StringRange::new(config.string_range.0, config.string_range.1);
         let active_notes = ActiveNotes::new(&note_registry, &tuning, string_range, fret_range);
         let (ctrl_tx, ctrl_rx) = mpsc::channel();
         thread::spawn(move || {
@@ -73,7 +71,7 @@ impl GameLogic {
                     if let Some(note) = analysis.note {
                         seen_count += (note == state.target_note) as usize;
                     }
-                    if seen_count == 50 {
+                    if seen_count == config.note_count_for_acceptance {
                         break;
                     }
                 }
@@ -109,11 +107,6 @@ pub struct FretRange {
 impl FretRange {
     pub fn new(beg_fret: usize, end_fret: usize) -> FretRange {
         assert!(
-            beg_fret <= MAX_FRETS && end_fret <= MAX_FRETS + 1,
-            "Maximum {} fret guitars are supported.",
-            MAX_FRETS
-        );
-        assert!(
             beg_fret < end_fret,
             "Fret range must include at least one fret."
         );
@@ -134,11 +127,6 @@ pub struct StringRange {
 
 impl StringRange {
     pub fn new(beg_string: usize, end_string: usize) -> StringRange {
-        assert!(
-            beg_string <= MAX_STRINGS && end_string <= MAX_STRINGS + 1,
-            "Maximum {} string guitars are supported.",
-            MAX_STRINGS
-        );
         assert!(beg_string >= 1);
         assert!(
             beg_string < end_string,

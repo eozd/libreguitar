@@ -1,8 +1,8 @@
 use crate::audio_analysis::{AnalysisResult, AudioAnalyzer};
-use crate::game_logic::{FretRange, StringRange};
 use crate::game_logic::{GameError, GameLogic};
 use crate::note::{NoteRegistry, Tuning};
 use crate::visualization::{ConsoleVisualizer, FrameData, GUIVisualizer};
+use crate::{AppCfg, Cfg};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::mpsc;
@@ -14,14 +14,6 @@ use cpal::BuildStreamError;
 use cpal::Device;
 use cpal::Stream;
 use cpal::StreamConfig;
-
-const FRAME_RATE: f64 = 30.0;
-const FRAME_PERIOD: f64 = 1.0 / FRAME_RATE;
-// Increasing this value further would cause latency in real time frequency detection.
-// Decreasing this value reduces FFT accuracy (particularly for low notes such as E2),
-// as the low frequency notes don't get enough time to oscillate. The effect on
-// high frequency notes such A4, A5, etc. is minimal even with block size of 128.
-const MIN_N_SAMPLES_IN_AUDIO_BLOCK: usize = 2048;
 
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -40,18 +32,19 @@ pub struct App {
     gui_visualizer: GUIVisualizer,
     console_visualizer: ConsoleVisualizer,
     game_logic: GameLogic,
+    app_cfg: AppCfg,
 }
 
 impl App {
-    pub fn new(
-        device: Device,
-        config: StreamConfig,
-        fret_range: FretRange,
-        string_range: StringRange,
-        note_registry: NoteRegistry,
-        tuning: Tuning,
-    ) -> Result<App, AppError> {
-        let analyzer = AudioAnalyzer::new(config.sample_rate.0 as usize, note_registry.notes());
+    pub fn new(device: Device, device_config: StreamConfig, cfg: Cfg) -> Result<App, AppError> {
+        let app_cfg = cfg.app;
+        let note_registry = NoteRegistry::from_csv(&app_cfg.frequencies_path)?;
+        let tuning = Tuning::from_csv(&app_cfg.tuning_path, &note_registry)?;
+        let analyzer = AudioAnalyzer::new(
+            device_config.sample_rate.0 as usize,
+            note_registry.notes(),
+            cfg.audio,
+        );
         let xaxis_props = (
             0.0,
             analyzer.n_bins() as f64 / analyzer.delta_f(),
@@ -60,23 +53,29 @@ impl App {
         let (gui_tx, gui_rx) = mpsc::channel();
         let (analysis_tx, analysis_rx) = mpsc::channel();
         let (console_tx, console_rx) = mpsc::channel();
-        let gui_visualizer = GUIVisualizer::new(gui_rx, xaxis_props);
+        let gui_visualizer = GUIVisualizer::new(gui_rx, xaxis_props, cfg.gui);
         let console_visualizer = ConsoleVisualizer::new(console_rx);
-        let audio_stream =
-            build_connection_protocols(device, config, analyzer, gui_tx, analysis_tx)?;
+        let audio_stream = build_connection_protocols(
+            device,
+            device_config,
+            analyzer,
+            gui_tx,
+            analysis_tx,
+            app_cfg.block_size,
+        )?;
         let game_logic = GameLogic::new(
             analysis_rx,
             vec![console_tx],
             note_registry,
             tuning,
-            string_range,
-            fret_range,
+            cfg.game,
         );
         Ok(App {
             audio_stream,
             gui_visualizer,
             console_visualizer,
             game_logic,
+            app_cfg,
         })
     }
 
@@ -87,10 +86,11 @@ impl App {
     pub fn run(&mut self) -> Result<(), AppError> {
         self.audio_stream.play()?;
         self.game_logic.play()?;
+        let frame_period = 1.0 / self.app_cfg.fps;
         while self.is_running() {
             self.console_visualizer.draw();
             self.gui_visualizer.draw();
-            std::thread::sleep(std::time::Duration::from_secs_f64(FRAME_PERIOD));
+            std::thread::sleep(std::time::Duration::from_secs_f64(frame_period));
         }
         Ok(())
     }
@@ -98,18 +98,19 @@ impl App {
 
 fn build_connection_protocols(
     device: Device,
-    config: StreamConfig,
+    device_config: StreamConfig,
     mut analyzer: AudioAnalyzer,
     gui_tx: mpsc::Sender<FrameData>,
     analysis_tx: mpsc::Sender<AnalysisResult>,
+    block_size: usize,
 ) -> Result<Stream, BuildStreamError> {
-    let mut audio_buffer = VecDeque::from(vec![0.0f64; MIN_N_SAMPLES_IN_AUDIO_BLOCK]);
+    let mut audio_buffer = VecDeque::from(vec![0.0f64; block_size]);
     audio_buffer.shrink_to_fit();
-    let n_channels = config.channels as usize;
+    let n_channels = device_config.channels as usize;
     // TODO: get from user
     let listened_channel = 0;
     device.build_input_stream(
-        &config,
+        &device_config,
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
             read_channel_buffered(data, n_channels, listened_channel, &mut audio_buffer);
             let analysis = analyzer.identify_note(audio_buffer.iter().cloned());

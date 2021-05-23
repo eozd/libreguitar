@@ -4,15 +4,26 @@ use statrs::statistics::Median;
 use std::collections::HashMap;
 use std::hash::Hash;
 
-pub fn find_note(freq_spectrum: &[f64], delta_f: f64, target_notes: &TargetNotes) -> Option<Note> {
+pub fn find_note(
+    freq_spectrum: &[f64],
+    delta_f: f64,
+    target_notes: &TargetNotes,
+    peak_threshold_median_coeff: f64,
+    min_peak_dist: usize,
+    num_top_peaks: usize,
+) -> Option<Note> {
     // TODO: make the algorithm adaptive instead of hardcoding these constants
     let median = freq_spectrum.median();
-    let mut peaks = find_peaks(freq_spectrum, Some(500. * median), Some(10));
+    let mut peaks = find_peaks(
+        freq_spectrum,
+        Some(peak_threshold_median_coeff * median),
+        Some(min_peak_dist),
+    );
     peaks.sort_unstable_by(|a, b| a.value.partial_cmp(&b.value).unwrap());
     let top_notes: Vec<&Note> = peaks
         .into_iter()
         .rev()
-        .take(5)
+        .take(num_top_peaks)
         .map(|p| {
             let freq = (p.idx as f64) * delta_f;
             target_notes.get_closest(freq)
