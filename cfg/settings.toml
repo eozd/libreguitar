@@ -2,31 +2,52 @@
 fps = 30.0
 frequencies_path = "resources/guitar_frequencies.csv"
 tuning_path = "resources/tuning.csv"
+# Increasing this value further would cause latency in real time frequency detection.
+# Decreasing this value reduces FFT accuracy (particularly for low notes such as E2),
+# as the low frequency notes don't get enough time to oscillate. The effect on
+# high frequency notes such A4, A5, etc. is minimal even with block size of 128.
+block_size = 2048
 
 [gui]
 width = 1280
 height = 960
+margin_size = 10
+label_area_size = 30
+# x axis max value
 spectrum_max_freq = 2000.0
+# y axis max value
 spectrum_max_magnitude = 0.01
 font_name = "sans-serif"
 font_size = 15
-font_color = [0, 255, 0]
-axis_color = [0, 255, 0]
-background_color = [0, 0, 0]
-line_color = [0, 255, 0]
+# r, g, b, a
+font_color = [0, 255, 0, 255]
+axis_color = [0, 255, 0, 255]
+background_color = [0, 0, 0, 255]
+line_color = [0, 255, 0, 100]
 
-[audio_analysis]
-block_size = 2048
+[audio]
+# increasing this value generates higher resolution FFTs
 fft_res_factor = 2.0
 fft_magnitude_gain = 10.0
-peak_threshold = 500
+# Effects peak detection. Increasing it would cause the algorithm
+# to detect less peaks
+peak_threshold = 500.0
+# Min distance between adjacent peaks. Good for very noisy audios.
 min_peak_dist = 10
+# Number of highest peaks in the spectrum to consider when detecting
+# the fundamental frequency.
 num_top_peaks = 5
+# Increasing smooths the audio signal even more, but might distort the
+# results.
 moving_avg_window_size = 11
 
 [game]
+# Range of frets to use during the game. Last fret is exclusive.
 fret_range = [0, 12]
+# Range of strings to use during the game. Last string is exclusive.
 string_range = [1, 7]
-max_frets = 24
-max_strings = 6
+# Number of times we need to see the target note as the output of the
+# audio analysis to consider that the player has played the target.
+# Increasing this value might reduce false positives, but it might take
+# longer to detect a note.
 note_count_for_acceptance = 50

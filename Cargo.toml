@@ -1,5 +1,5 @@
 [package]
-name = "fretboard-trainer"
+name = "fb-trainer"
 version = "0.1.0"
 authors = ["Eshref Yozdemir <eshrefyoz@gmail.com>"]
 edition = "2018"

@@ -436,6 +436,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "fb-trainer"
+version = "0.1.0"
+dependencies = [
+ "config",
+ "cpal",
+ "csv",
+ "minifb",
+ "plotters",
+ "plotters-bitmap",
+ "rand 0.8.3",
+ "realfft",
+ "rustfft",
+ "serde 1.0.125",
+ "statrs",
+ "thiserror",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -519,24 +537,6 @@ checksum = "11926b2b410b469d0e9399eca4cbbe237a9ef02176c485803b29216307e8e028"
 dependencies = [
  "libc",
  "servo-freetype-sys",
-]
-
-[[package]]
-name = "fretboard-trainer"
-version = "0.1.0"
-dependencies = [
- "config",
- "cpal",
- "csv",
- "minifb",
- "plotters",
- "plotters-bitmap",
- "rand 0.8.3",
- "realfft",
- "rustfft",
- "serde 1.0.125",
- "statrs",
- "thiserror",
 ]
 
 [[package]]
