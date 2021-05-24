@@ -1,8 +1,7 @@
 use crate::audio_analysis::{AnalysisResult, AudioAnalyzer};
-use crate::game_logic::{GameError, GameLogic};
-use crate::note::{NoteRegistry, Tuning};
+use crate::core::{AppCfg, Cfg, NoteRegistry, Tuning};
+use crate::game::{GameError, GameLogic};
 use crate::visualization::{ConsoleVisualizer, FrameData, GUIVisualizer};
-use crate::{AppCfg, Cfg};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::mpsc;

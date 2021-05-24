@@ -1,12 +1,9 @@
 use crate::audio_analysis::AnalysisResult;
-use crate::fret_loc::FretLoc;
-use crate::game_state::GameState;
-use crate::note::{Note, NoteRegistry, Tuning};
-use crate::GameCfg;
+use crate::core::{FretLoc, FretRange, GameCfg, Note, NoteRegistry, StringRange, Tuning};
+use crate::game::GameState;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
-use std::ops::Range;
 use std::sync::mpsc;
 use std::thread;
 
@@ -124,8 +121,8 @@ impl GameLogic {
 }
 
 fn pick_note<'a>(notes: &'a ActiveNotes, rng: &mut impl rand::Rng) -> (&'a Note, FretLoc) {
-    let string_idx = rng.gen_range(notes.string_range.range());
-    let fret_idx = rng.gen_range(notes.fret_range.range());
+    let string_idx = rng.gen_range(notes.string_range.r());
+    let fret_idx = rng.gen_range(notes.fret_range.r());
     let key = (string_idx, fret_idx);
     (
         notes.notes.get(&key).unwrap(),
@@ -134,51 +131,6 @@ fn pick_note<'a>(notes: &'a ActiveNotes, rng: &mut impl rand::Rng) -> (&'a Note,
             fret_idx,
         },
     )
-}
-
-#[derive(Clone)]
-pub struct FretRange {
-    range: Range<usize>,
-}
-
-impl FretRange {
-    pub fn new(beg_fret: usize, end_fret: usize) -> FretRange {
-        assert!(
-            beg_fret < end_fret,
-            "Fret range must include at least one fret."
-        );
-
-        FretRange {
-            range: beg_fret..end_fret,
-        }
-    }
-
-    pub fn range(&self) -> Range<usize> {
-        self.range.clone()
-    }
-}
-
-#[derive(Clone)]
-pub struct StringRange {
-    range: Range<usize>,
-}
-
-impl StringRange {
-    pub fn new(beg_string: usize, end_string: usize) -> StringRange {
-        assert!(beg_string >= 1);
-        assert!(
-            beg_string < end_string,
-            "String range must include at least one string."
-        );
-
-        StringRange {
-            range: beg_string..end_string,
-        }
-    }
-
-    pub fn range(&self) -> Range<usize> {
-        self.range.clone()
-    }
 }
 
 #[derive(Debug)]
@@ -204,14 +156,12 @@ impl ActiveNotes {
         fret_range: FretRange,
     ) -> ActiveNotes {
         let mut notes = HashMap::new();
-        for string_idx in string_range.range() {
+        for string_idx in string_range.r() {
             // TODO: read fret ranges while considering the tuning
             // TODO: read fret ranges while considering the tuning
             let open_note = tuning.note(string_idx);
-            let mut note_iter = registry
-                .iter_from(&open_note)
-                .skip(fret_range.range().start);
-            for fret_idx in fret_range.range() {
+            let mut note_iter = registry.iter_from(&open_note).skip(fret_range.r().start);
+            for fret_idx in fret_range.r() {
                 match note_iter.next() {
                     Some(curr_note) => {
                         notes.insert((string_idx, fret_idx), curr_note.clone());

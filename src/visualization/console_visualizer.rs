@@ -1,8 +1,5 @@
-use crate::fret_loc::FretLoc;
-use crate::game_logic::{FretRange, StringRange};
-use crate::game_state::GameState;
-use crate::note::Tuning;
-use crate::ConsoleCfg;
+use crate::core::{ConsoleCfg, FretLoc, FretRange, StringRange, Tuning};
+use crate::game::GameState;
 use console::Term;
 use std::error::Error;
 use std::fmt;
@@ -133,14 +130,14 @@ impl FretboardDrawer {
         played_fret: usize,
         open_note: &str,
     ) -> fmt::Result {
-        let first_sep_char = if fret_range.range().start == 0 {
+        let first_sep_char = if fret_range.r().start == 0 {
             &self.empty_char
         } else {
             &self.sep_str
         };
         write!(out_str, "{}", open_note)?;
         write!(out_str, "{}", first_sep_char)?;
-        for i in fret_range.range() {
+        for i in fret_range.r() {
             self.draw_fret(
                 out_str,
                 &self.string_char,
@@ -159,7 +156,7 @@ impl FretboardDrawer {
 
     fn draw_fret_numbers(&self, out_str: &mut String, fret_range: &FretRange) -> fmt::Result {
         write!(out_str, "{}", self.empty_char)?;
-        for i in fret_range.range() {
+        for i in fret_range.r() {
             let i_str = i.to_string();
             let i_in_first_octave = i % 12;
             self.draw_fret(
@@ -180,12 +177,12 @@ impl FretboardDrawer {
         target_loc: &Option<FretLoc>,
     ) -> Result<String, Box<dyn Error>> {
         let mut out = String::new();
-        let out_of_bounds_fret = fret_range.range().end;
+        let out_of_bounds_fret = fret_range.r().end;
         let (fret_idx, string_idx) = match target_loc {
             Some(loc) => (loc.fret_idx, loc.string_idx),
-            None => (out_of_bounds_fret, string_range.range().end),
+            None => (out_of_bounds_fret, string_range.r().end),
         };
-        for (i, open_note) in string_range.range().zip(self.tuning.iter()) {
+        for (i, open_note) in string_range.r().zip(self.tuning.iter()) {
             let fret_idx = if i == string_idx {
                 fret_idx
             } else {
@@ -193,7 +190,7 @@ impl FretboardDrawer {
             };
             self.draw_string(&mut out, fret_range, fret_idx, &open_note.name.to_string())?;
             writeln!(&mut out)?;
-            if i < string_range.range().end - 1 {
+            if i < string_range.r().end - 1 {
                 for _ in 0..self.n_space_between_strings {
                     self.draw_string(&mut out, fret_range, out_of_bounds_fret, " ")?;
                     writeln!(&mut out)?;

@@ -1,20 +1,20 @@
 mod app;
 mod audio_analysis;
-mod cfg;
-mod fret_loc;
-mod game_logic;
-mod game_state;
-mod note;
+mod core;
+mod game;
 mod visualization;
 
 use crate::app::{App, AppError};
+pub use crate::core::Cfg;
 
 use cpal::Device;
 use cpal::StreamConfig;
 
-pub use crate::cfg::{AppCfg, AudioCfg, Cfg, ConsoleCfg, GameCfg, GuiCfg};
-
-pub fn run(device: Device, device_config: StreamConfig, app_config: Cfg) -> Result<(), AppError> {
+pub fn run(
+    device: Device,
+    device_config: StreamConfig,
+    app_config: core::Cfg,
+) -> Result<(), AppError> {
     let mut app = App::new(device, device_config, app_config)?;
     app.run()
 }
