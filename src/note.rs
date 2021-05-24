@@ -168,6 +168,7 @@ struct TuningSpecification {
     name: NoteName,
 }
 
+#[derive(Clone)]
 pub struct Tuning {
     values: Vec<Note>,
 }
@@ -210,6 +211,10 @@ impl Tuning {
             self.values.len() + 1
         );
         &self.values[string_idx - 1]
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Note> {
+        self.values.iter()
     }
 }
 

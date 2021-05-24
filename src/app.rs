@@ -58,13 +58,15 @@ impl App {
             analysis_rx,
             vec![console_tx],
             note_registry,
-            tuning,
+            tuning.clone(),
             cfg.game,
         );
         let console_visualizer = ConsoleVisualizer::new(
             console_rx,
             game_logic.fret_range().clone(),
             game_logic.string_range().clone(),
+            cfg.console,
+            tuning,
         );
         let audio_stream = build_connection_protocols(
             device,
