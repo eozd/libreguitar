@@ -1,7 +1,6 @@
 use crate::audio_analysis::AnalysisResult;
 use crate::core::{FretLoc, FretRange, GameCfg, Note, NoteRegistry, StringRange, Tuning};
-use crate::game::GameState;
-use std::collections::HashMap;
+use crate::game::{ActiveNotes, GameState};
 use std::error::Error;
 use std::fmt;
 use std::sync::mpsc;
@@ -123,9 +122,12 @@ impl GameLogic {
 fn pick_note<'a>(notes: &'a ActiveNotes, rng: &mut impl rand::Rng) -> (&'a Note, FretLoc) {
     let string_idx = rng.gen_range(notes.string_range.r());
     let fret_idx = rng.gen_range(notes.fret_range.r());
-    let key = (string_idx, fret_idx);
+    let key = FretLoc {
+        string_idx,
+        fret_idx,
+    };
     (
-        notes.notes.get(&key).unwrap(),
+        notes.get(&key).unwrap(),
         FretLoc {
             string_idx,
             fret_idx,
@@ -142,42 +144,9 @@ impl fmt::Display for ConfigurationError {
 }
 impl Error for ConfigurationError {}
 
-struct ActiveNotes {
-    string_range: StringRange,
-    fret_range: FretRange,
-    notes: HashMap<(usize, usize), Note>,
-}
-
-impl ActiveNotes {
-    fn new(
-        registry: &NoteRegistry,
-        tuning: &Tuning,
-        string_range: StringRange,
-        fret_range: FretRange,
-    ) -> ActiveNotes {
-        let mut notes = HashMap::new();
-        for string_idx in string_range.r() {
-            // TODO: read fret ranges while considering the tuning
-            // TODO: read fret ranges while considering the tuning
-            let open_note = tuning.note(string_idx);
-            let mut note_iter = registry.iter_from(&open_note).skip(fret_range.r().start);
-            for fret_idx in fret_range.r() {
-                match note_iter.next() {
-                    Some(curr_note) => {
-                        notes.insert((string_idx, fret_idx), curr_note.clone());
-                    }
-                    None => {
-                        // TODO: use logging library
-                        println!("Note on string {} fret {} does not exist in frequency list. Skipping...", string_idx, fret_idx);
-                    }
-                }
-            }
-        }
-
-        ActiveNotes {
-            string_range,
-            fret_range,
-            notes,
-        }
-    }
+#[cfg(test)]
+mod game_logic_tests {
+    use super::*;
+    #[test]
+    fn test_equality() {}
 }
