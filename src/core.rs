@@ -15,4 +15,4 @@ pub use note::Note;
 pub use note_name::NoteName;
 pub use note_registry::NoteRegistry;
 pub use string_range::StringRange;
-pub use tuning::Tuning;
+pub use tuning::{Tuning, TuningSpecification};
