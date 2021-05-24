@@ -26,6 +26,18 @@ pub struct GuiCfg {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ConsoleCfg {
+    pub fret_size: usize,
+    pub string_char: String,
+    pub fret_char: String,
+    pub empty_char: String,
+    pub sep_str: String,
+    pub open_sep_str: String,
+    pub frets_to_number: Vec<usize>,
+    pub n_space_between_strings: usize,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct AudioCfg {
     pub fft_res_factor: f64,
     pub fft_magnitude_gain: f64,
@@ -40,6 +52,7 @@ pub struct GameCfg {
     pub fret_range: (usize, usize),
     pub string_range: (usize, usize),
     pub note_count_for_acceptance: usize,
+    pub state_update_period: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +61,7 @@ pub struct Cfg {
     pub gui: GuiCfg,
     pub audio: AudioCfg,
     pub game: GameCfg,
+    pub console: ConsoleCfg,
 }
 
 impl Cfg {

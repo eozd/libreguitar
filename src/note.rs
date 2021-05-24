@@ -41,11 +41,37 @@ pub enum NoteName {
     GSharp,
 }
 
+impl fmt::Display for NoteName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            NoteName::A => "A",
+            NoteName::ASharp => "A♯",
+            NoteName::B => "B",
+            NoteName::C => "C",
+            NoteName::CSharp => "C♯",
+            NoteName::D => "D",
+            NoteName::DSharp => "D♯",
+            NoteName::E => "E",
+            NoteName::F => "F",
+            NoteName::FSharp => "F♯",
+            NoteName::G => "G",
+            NoteName::GSharp => "G♯",
+        };
+        write!(f, "{}", name)
+    }
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct Note {
     pub octave: usize,
     pub name: NoteName,
     pub frequency: f64,
+}
+
+impl Note {
+    pub fn name_octave(&self) -> String {
+        format!("{}{}", self.name, self.octave)
+    }
 }
 
 impl PartialEq for Note {
@@ -142,6 +168,7 @@ struct TuningSpecification {
     name: NoteName,
 }
 
+#[derive(Clone)]
 pub struct Tuning {
     values: Vec<Note>,
 }
@@ -184,6 +211,10 @@ impl Tuning {
             self.values.len() + 1
         );
         &self.values[string_idx - 1]
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Note> {
+        self.values.iter()
     }
 }
 

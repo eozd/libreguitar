@@ -1,4 +1,5 @@
 use crate::audio_analysis::AnalysisResult;
+use crate::fret_loc::FretLoc;
 use crate::game_state::GameState;
 use crate::note::{Note, NoteRegistry, Tuning};
 use crate::GameCfg;
@@ -27,6 +28,8 @@ enum ThreadCtrl {
 
 pub struct GameLogic {
     ctrl_tx: mpsc::Sender<ThreadCtrl>,
+    fret_range: FretRange,
+    string_range: StringRange,
 }
 
 fn wait_until_start(rx: &mpsc::Receiver<ThreadCtrl>) -> Result<(), mpsc::RecvError> {
@@ -50,8 +53,14 @@ impl GameLogic {
     ) -> GameLogic {
         let fret_range = FretRange::new(config.fret_range.0, config.fret_range.1);
         let string_range = StringRange::new(config.string_range.0, config.string_range.1);
-        let active_notes = ActiveNotes::new(&note_registry, &tuning, string_range, fret_range);
+        let active_notes = ActiveNotes::new(
+            &note_registry,
+            &tuning,
+            string_range.clone(),
+            fret_range.clone(),
+        );
         let (ctrl_tx, ctrl_rx) = mpsc::channel();
+        let needed_detection_count = config.note_count_for_acceptance;
         thread::spawn(move || {
             wait_until_start(&ctrl_rx).unwrap();
             let mut rng = rand::thread_rng();
@@ -59,25 +68,46 @@ impl GameLogic {
                 // if let Ok(ThreadCtrl::Stop) = ctrl_rx.try_recv() {
                 //     wait_until_start(&ctrl_rx).unwrap();
                 // }
-                let target_note = pick_note(&active_notes, &mut rng);
-                let state = GameState {
+                let (target_note, target_loc) = pick_note(&active_notes, &mut rng);
+                let mut state = GameState {
                     target_note: target_note.clone(),
+                    target_loc,
+                    needed_detection_count,
+                    curr_detection_count: 0,
                 };
                 for tx in tx_vec.iter() {
                     tx.send(state.clone()).unwrap();
                 }
-                let mut seen_count = 0;
                 for analysis in rx.iter() {
                     if let Some(note) = analysis.note {
-                        seen_count += (note == state.target_note) as usize;
+                        state.curr_detection_count += (note == state.target_note) as usize;
                     }
-                    if seen_count == config.note_count_for_acceptance {
+                    if state.curr_detection_count > 0
+                        && state.curr_detection_count % config.state_update_period == 0
+                    {
+                        for tx in tx_vec.iter() {
+                            tx.send(state.clone()).unwrap();
+                        }
+                    }
+                    if state.curr_detection_count == needed_detection_count {
                         break;
                     }
                 }
             }
         });
-        GameLogic { ctrl_tx }
+        GameLogic {
+            ctrl_tx,
+            fret_range,
+            string_range,
+        }
+    }
+
+    pub fn fret_range(&self) -> &FretRange {
+        &self.fret_range
+    }
+
+    pub fn string_range(&self) -> &StringRange {
+        &self.string_range
     }
 
     pub fn play(&mut self) -> Result<(), GameError> {
@@ -93,13 +123,20 @@ impl GameLogic {
     // }
 }
 
-fn pick_note<'a>(notes: &'a ActiveNotes, rng: &mut impl rand::Rng) -> &'a Note {
+fn pick_note<'a>(notes: &'a ActiveNotes, rng: &mut impl rand::Rng) -> (&'a Note, FretLoc) {
     let string_idx = rng.gen_range(notes.string_range.range());
     let fret_idx = rng.gen_range(notes.fret_range.range());
     let key = (string_idx, fret_idx);
-    notes.notes.get(&key).unwrap()
+    (
+        notes.notes.get(&key).unwrap(),
+        FretLoc {
+            string_idx,
+            fret_idx,
+        },
+    )
 }
 
+#[derive(Clone)]
 pub struct FretRange {
     range: Range<usize>,
 }
@@ -121,6 +158,7 @@ impl FretRange {
     }
 }
 
+#[derive(Clone)]
 pub struct StringRange {
     range: Range<usize>,
 }

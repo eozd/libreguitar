@@ -54,7 +54,20 @@ impl App {
         let (analysis_tx, analysis_rx) = mpsc::channel();
         let (console_tx, console_rx) = mpsc::channel();
         let gui_visualizer = GUIVisualizer::new(gui_rx, xaxis_props, cfg.gui);
-        let console_visualizer = ConsoleVisualizer::new(console_rx);
+        let game_logic = GameLogic::new(
+            analysis_rx,
+            vec![console_tx],
+            note_registry,
+            tuning.clone(),
+            cfg.game,
+        );
+        let console_visualizer = ConsoleVisualizer::new(
+            console_rx,
+            game_logic.fret_range().clone(),
+            game_logic.string_range().clone(),
+            cfg.console,
+            tuning,
+        );
         let audio_stream = build_connection_protocols(
             device,
             device_config,
@@ -63,13 +76,6 @@ impl App {
             analysis_tx,
             app_cfg.block_size,
         )?;
-        let game_logic = GameLogic::new(
-            analysis_rx,
-            vec![console_tx],
-            note_registry,
-            tuning,
-            cfg.game,
-        );
         Ok(App {
             audio_stream,
             gui_visualizer,

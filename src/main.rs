@@ -10,7 +10,7 @@ use cpal::Host;
 use cpal::SampleRate;
 use cpal::StreamConfig;
 
-use fb_trainer::{run, Cfg};
+use libreguitar::{run, Cfg};
 
 const APP_CONFIG_PATH: &str = "cfg/settings.toml";
 
