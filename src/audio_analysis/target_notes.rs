@@ -1,4 +1,4 @@
-use crate::note::Note;
+use crate::core::Note;
 
 pub struct TargetNotes {
     arr: Vec<Note>,
@@ -49,7 +49,7 @@ impl TargetNotes {
 #[cfg(test)]
 mod tests {
     use super::TargetNotes;
-    use crate::note::{Note, NoteName};
+    use crate::core::{Note, NoteName};
 
     #[test]
     #[should_panic]

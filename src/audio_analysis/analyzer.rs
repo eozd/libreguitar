@@ -1,8 +1,7 @@
 use crate::audio_analysis::algorithm::{find_note, moving_avg};
 use crate::audio_analysis::analysis_result::AnalysisResult;
 use crate::audio_analysis::target_notes::TargetNotes;
-use crate::note::Note;
-use crate::AudioCfg;
+use crate::core::{AudioCfg, Note};
 use realfft::{num_complex::Complex, RealFftPlanner, RealToComplex};
 use std::f64;
 use std::sync::Arc;

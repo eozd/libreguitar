@@ -1,5 +1,5 @@
 use crate::audio_analysis::target_notes::TargetNotes;
-use crate::note::Note;
+use crate::core::Note;
 use statrs::statistics::Median;
 use std::collections::HashMap;
 use std::hash::Hash;

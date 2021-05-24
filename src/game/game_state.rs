@@ -1,5 +1,4 @@
-use crate::fret_loc::FretLoc;
-use crate::note::Note;
+use crate::core::{FretLoc, Note};
 
 #[derive(Debug, Clone)]
 pub struct GameState {
