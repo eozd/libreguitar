@@ -1,4 +1,4 @@
-# Fretboard Trainer
+# LibreGuitar
 ![Unit tests](https://github.com/eozd/fretboard-trainer/workflows/Rust/badge.svg?branch=main)
 
 CLI application that recognizes notes played on a guitar through the sound interface. This project
