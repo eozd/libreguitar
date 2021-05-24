@@ -1,6 +1,7 @@
 mod app;
 mod audio_analysis;
 mod cfg;
+mod fret_loc;
 mod game_logic;
 mod game_state;
 mod note;

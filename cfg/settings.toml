@@ -51,3 +51,4 @@ string_range = [1, 7]
 # Increasing this value might reduce false positives, but it might take
 # longer to detect a note.
 note_count_for_acceptance = 50
+state_update_period = 10

@@ -1,5 +1,7 @@
+use crate::fret_loc::FretLoc;
 use crate::game_logic::{FretRange, StringRange};
 use crate::game_state::GameState;
+use console::Term;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Write;
@@ -9,6 +11,9 @@ pub struct ConsoleVisualizer {
     rx: mpsc::Receiver<GameState>,
     fret_range: FretRange,
     string_range: StringRange,
+    term: Term,
+    previous_target: Option<FretLoc>,
+    curr_target: FretLoc,
 }
 
 impl ConsoleVisualizer {
@@ -17,10 +22,17 @@ impl ConsoleVisualizer {
         fret_range: FretRange,
         string_range: StringRange,
     ) -> ConsoleVisualizer {
+        let term = Term::stdout();
         ConsoleVisualizer {
             rx,
             fret_range,
             string_range,
+            term,
+            previous_target: None,
+            curr_target: FretLoc {
+                string_idx: 0,
+                fret_idx: 0,
+            },
         }
     }
 
@@ -30,10 +42,28 @@ impl ConsoleVisualizer {
 
     pub fn draw(&mut self) {
         let packet = self.rx.try_recv();
-        if let Ok(note) = packet {
-            println!("Play {:?}", note);
-            let fb_repr = draw_fretboard(&self.fret_range, &self.string_range).unwrap();
-            println!("{}", fb_repr);
+        if let Ok(game_state) = packet {
+            self.term.clear_screen().unwrap();
+            self.term.write_line("Previously played note:").unwrap();
+            if self.curr_target != game_state.target_loc {
+                self.previous_target = Some(self.curr_target.clone());
+                self.curr_target = game_state.target_loc.clone();
+            }
+            self.term
+                .write_line(
+                    &draw_fretboard(&self.fret_range, &self.string_range, &self.previous_target)
+                        .unwrap(),
+                )
+                .unwrap();
+            self.term
+                .write_line(&format!(
+                    "Play {} on string {} (detection count: {}/{})",
+                    game_state.target_note.name_octave(),
+                    game_state.target_loc.string_idx,
+                    game_state.curr_detection_count,
+                    game_state.needed_detection_count
+                ))
+                .unwrap();
         }
     }
 }
@@ -114,6 +144,7 @@ fn draw_fret_numbers(
 fn draw_fretboard(
     fret_range: &FretRange,
     string_range: &StringRange,
+    target_loc: &Option<FretLoc>,
 ) -> Result<String, Box<dyn Error>> {
     let mut out = String::new();
     let string_char = "-";
@@ -125,13 +156,23 @@ fn draw_fretboard(
     let open_sep_str = "O";
     // TODO: get from Tuning struct
     let tuning = vec!["e", "b", "G", "D", "A", "E"];
+    let out_of_bounds_fret = fret_range.range().end;
+    let (fret_idx, string_idx) = match target_loc {
+        Some(loc) => (loc.fret_idx, loc.string_idx),
+        None => (out_of_bounds_fret, string_range.range().end),
+    };
     for (i, open_note) in string_range.range().zip(tuning.iter()) {
+        let fret_idx = if i == string_idx {
+            fret_idx
+        } else {
+            out_of_bounds_fret
+        };
         draw_string(
             &mut out,
             open_note,
             fret_range,
             fret_size,
-            50,
+            fret_idx,
             string_char,
             sep_str,
             open_sep_str,
@@ -144,7 +185,7 @@ fn draw_fretboard(
                     " ",
                     fret_range,
                     fret_size,
-                    50,
+                    out_of_bounds_fret,
                     empty_char,
                     sep_str,
                     open_sep_str,

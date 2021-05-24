@@ -40,6 +40,7 @@ pub struct GameCfg {
     pub fret_range: (usize, usize),
     pub string_range: (usize, usize),
     pub note_count_for_acceptance: usize,
+    pub state_update_period: usize,
 }
 
 #[derive(Debug, Deserialize)]

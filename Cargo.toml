@@ -17,5 +17,6 @@ serde = { version = "1", features = ["derive"]}
 config = "0.11"
 statrs = "0.13"
 minifb = "0.13"
+console = "0.14"
 plotters = { version = "0.3", default_features = false, features = ["ttf", "line_series"] }
 plotters-bitmap = { version = "0.3", default_features = false }
