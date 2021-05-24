@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
-struct DuplicateNoteError(String);
+pub struct DuplicateNoteError(String);
 impl fmt::Display for DuplicateNoteError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "DuplicateNoteError: {}", self.0)
@@ -26,7 +26,7 @@ impl NoteRegistry {
         }
     }
 
-    fn from_notes(mut notes: Vec<Note>) -> Result<NoteRegistry, DuplicateNoteError> {
+    pub fn from_notes(mut notes: Vec<Note>) -> Result<NoteRegistry, DuplicateNoteError> {
         notes.sort_unstable_by(|a, b| a.frequency.partial_cmp(&b.frequency).unwrap());
         if !notes.is_empty() {
             for i in 0..notes.len() - 1 {
