@@ -1,6 +1,7 @@
 use crate::core::csv::parse_csv;
 use crate::core::{Note, NoteName, NoteRegistry};
 use serde::Deserialize;
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 
@@ -15,14 +16,14 @@ impl Error for InvalidTuningError {}
 
 #[derive(Deserialize, PartialEq)]
 pub struct TuningSpecification {
-    string: usize,
-    octave: usize,
-    name: NoteName,
+    pub string: usize,
+    pub octave: i32,
+    pub name: NoteName,
 }
 
 #[derive(Clone)]
 pub struct Tuning {
-    values: Vec<Note>,
+    values: BTreeMap<usize, Note>,
 }
 
 impl Tuning {
@@ -42,15 +43,10 @@ impl Tuning {
         tuning_spec: &[TuningSpecification],
         note_registry: &NoteRegistry,
     ) -> Result<Tuning, InvalidTuningError> {
-        let mut map = Vec::new();
-        for (i, row) in tuning_spec.iter().enumerate() {
-            if row.string - 1 != i {
-                return Err(InvalidTuningError(String::from(
-                    "Tuning specification needs strings to be numbered as 1, 2, 3, ...",
-                )));
-            }
+        let mut map = BTreeMap::new();
+        for row in tuning_spec.iter() {
             if let Some(note) = note_registry.get(row.name, row.octave) {
-                map.push(note.clone());
+                map.insert(row.string, note.clone());
             } else {
                 return Err(InvalidTuningError(String::from(
                     "Tuning specification contains a note not given in note frequency list",
@@ -60,19 +56,12 @@ impl Tuning {
         Ok(Tuning { values: map })
     }
 
-    pub fn note(&self, string_idx: usize) -> &Note {
-        debug_assert!(
-            string_idx > 0 && string_idx <= self.values.len(),
-            "Guitar string index {} is out of bounds ({}, {})",
-            string_idx,
-            1,
-            self.values.len() + 1
-        );
-        &self.values[string_idx - 1]
+    pub fn note(&self, string_idx: usize) -> Option<&Note> {
+        self.values.get(&string_idx)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Note> {
-        self.values.iter()
+        self.values.values()
     }
 }
 
@@ -89,16 +78,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_tuning_empty_panic() {
         let tuning_spec = vec![];
         let note_reg = NoteRegistry::from_notes(vec![]).unwrap();
         let tuning = Tuning::from_specification(&tuning_spec[..], &note_reg).unwrap();
-        tuning.note(1);
+        assert_eq!(None, tuning.note(1));
     }
 
     #[test]
-    #[should_panic]
     fn test_tuning_nonempty_panic_wrong_idx() {
         let tuning_spec = vec![TuningSpecification {
             octave: 1,
@@ -112,11 +99,10 @@ mod tests {
         }])
         .unwrap();
         let tuning = Tuning::from_specification(&tuning_spec[..], &note_reg).unwrap();
-        tuning.note(0);
+        assert_eq!(None, tuning.note(0));
     }
 
     #[test]
-    #[should_panic]
     fn test_tuning_nonempty_panic() {
         let tuning_spec = vec![TuningSpecification {
             octave: 1,
@@ -130,7 +116,7 @@ mod tests {
         }])
         .unwrap();
         let tuning = Tuning::from_specification(&tuning_spec[..], &note_reg).unwrap();
-        tuning.note(2);
+        assert_eq!(None, tuning.note(2));
     }
 
     #[test]
@@ -222,9 +208,9 @@ mod tests {
         ];
         let note_reg = NoteRegistry::from_notes(note_vec.clone()).unwrap();
         let tuning = Tuning::from_specification(&tuning_spec[..], &note_reg).unwrap();
-        assert_eq!(&note_vec[0], tuning.note(1));
-        assert_eq!(&note_vec[2], tuning.note(2));
-        assert_eq!(&note_vec[4], tuning.note(3));
+        assert_eq!(&note_vec[0], tuning.note(1).unwrap());
+        assert_eq!(&note_vec[2], tuning.note(2).unwrap());
+        assert_eq!(&note_vec[4], tuning.note(3).unwrap());
     }
 
     #[test]
