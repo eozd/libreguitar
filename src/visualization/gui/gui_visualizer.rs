@@ -1,7 +1,7 @@
 // DISCLAIMER: Major parts of the frame handling in this file is adapted
 // from https://github.com/38/plotters/blob/master/examples/minifb-demo/src/main.rs
-use crate::core::GuiCfg;
-use crate::visualization::FrameData;
+use crate::visualization::gui::GuiCfg;
+use crate::visualization::Visualizer;
 use minifb::{Key, Window, WindowOptions};
 use plotters::chart::ChartState;
 use plotters::coord::types::RangedCoordf64;
@@ -41,6 +41,10 @@ impl BorrowMut<[u32]> for BufferWrapper {
 fn color_from_tup(rgb: (u8, u8, u8, u8)) -> RGBAColor {
     let alpha = rgb.3 as f64 / 255.0;
     RGBColor(rgb.0, rgb.1, rgb.2).mix(alpha)
+}
+
+pub struct FrameData {
+    pub spectrogram: Vec<f64>,
 }
 
 pub struct GUIVisualizer {
@@ -108,12 +112,14 @@ impl GUIVisualizer {
             line_color,
         }
     }
+}
 
-    pub fn is_open(&self) -> bool {
+impl Visualizer for GUIVisualizer {
+    fn is_open(&self) -> bool {
         self.window.is_open() && !self.window.is_key_down(Key::Escape)
     }
 
-    pub fn draw(&mut self) {
+    fn draw(&mut self) {
         let packet = self.rx.try_iter().last();
         if packet.is_none() {
             return;

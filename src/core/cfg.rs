@@ -1,5 +1,9 @@
+#[cfg(feature = "gui")]
+use crate::visualization::GuiCfg;
 use config::{Config, ConfigError, File};
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 pub struct AppCfg {
@@ -7,22 +11,6 @@ pub struct AppCfg {
     pub frequencies_path: String,
     pub tuning_path: String,
     pub block_size: usize,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct GuiCfg {
-    pub width: usize,
-    pub height: usize,
-    pub margin_size: u32,
-    pub label_area_size: u32,
-    pub spectrum_max_freq: f64,
-    pub spectrum_max_magnitude: f64,
-    pub font_name: String,
-    pub font_size: i32,
-    pub font_color: (u8, u8, u8, u8),
-    pub axis_color: (u8, u8, u8, u8),
-    pub background_color: (u8, u8, u8, u8),
-    pub line_color: (u8, u8, u8, u8),
 }
 
 #[derive(Debug, Deserialize)]
@@ -58,17 +46,37 @@ pub struct GameCfg {
 #[derive(Debug, Deserialize)]
 pub struct Cfg {
     pub app: AppCfg,
-    pub gui: GuiCfg,
     pub audio: AudioCfg,
     pub game: GameCfg,
     pub console: ConsoleCfg,
+    #[cfg(feature = "gui")]
+    pub gui: GuiCfg,
+}
+
+fn get_cfg<T>(path: &str) -> Result<T, ConfigError>
+where
+    T: DeserializeOwned,
+{
+    let mut s = Config::default();
+    s.merge(File::with_name(path))?;
+    s.try_into()
 }
 
 impl Cfg {
     pub fn new(path: &str) -> Result<Self, ConfigError> {
-        let mut s = Config::default();
+        let base_path = Path::new(path);
+        let app_cfg = get_cfg(base_path.join(Path::new("app.toml")).to_str().unwrap())?;
+        let audio_cfg = get_cfg(base_path.join(Path::new("audio.toml")).to_str().unwrap())?;
+        let game_cfg = get_cfg(base_path.join(Path::new("game.toml")).to_str().unwrap())?;
+        let console_cfg = get_cfg(base_path.join(Path::new("console.toml")).to_str().unwrap())?;
 
-        s.merge(File::with_name(path))?;
-        s.try_into()
+        Ok(Cfg {
+            app: app_cfg,
+            audio: audio_cfg,
+            game: game_cfg,
+            console: console_cfg,
+            #[cfg(feature = "gui")]
+            gui: get_cfg(base_path.join(Path::new("gui.toml")).to_str().unwrap())?,
+        })
     }
 }

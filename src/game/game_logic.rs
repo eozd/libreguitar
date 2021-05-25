@@ -126,13 +126,7 @@ fn pick_note<'a>(notes: &'a ActiveNotes, rng: &mut impl rand::Rng) -> (&'a Note,
         string_idx,
         fret_idx,
     };
-    (
-        notes.get(&key).unwrap(),
-        FretLoc {
-            string_idx,
-            fret_idx,
-        },
-    )
+    (notes.get(&key).unwrap(), key)
 }
 
 #[derive(Debug)]

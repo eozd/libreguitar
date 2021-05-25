@@ -1,0 +1,15 @@
+width = 1280
+height = 960
+margin_size = 10
+label_area_size = 30
+# x axis max value
+spectrum_max_freq = 2000.0
+# y axis max value
+spectrum_max_magnitude = 0.01
+font_name = "sans-serif"
+font_size = 15
+# r, g, b, a
+font_color = [0, 255, 0, 255]
+axis_color = [0, 255, 0, 255]
+background_color = [0, 0, 0, 255]
+line_color = [0, 255, 0, 150]

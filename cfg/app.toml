@@ -1,0 +1,8 @@
+fps = 30.0
+frequencies_path = "resources/guitar_frequencies.csv"
+tuning_path = "resources/tuning.csv"
+# Increasing this value further would cause latency in real time frequency detection.
+# Decreasing this value reduces FFT accuracy (particularly for low notes such as E2),
+# as the low frequency notes don't get enough time to oscillate. The effect on
+# high frequency notes such A4, A5, etc. is minimal even with block size of 128.
+block_size = 2048
