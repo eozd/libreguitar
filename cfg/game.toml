@@ -1,0 +1,10 @@
+# Range of frets to use during the game. Last fret is exclusive.
+fret_range = [0, 12]
+# Range of strings to use during the game. Last string is exclusive.
+string_range = [1, 7]
+# Number of times we need to see the target note as the output of the
+# audio analysis to consider that the player has played the target.
+# Increasing this value might reduce false positives, but it might take
+# longer to detect a note.
+note_count_for_acceptance = 50
+state_update_period = 10

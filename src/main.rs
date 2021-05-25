@@ -12,7 +12,7 @@ use cpal::StreamConfig;
 
 use libreguitar::{run, Cfg};
 
-const APP_CONFIG_PATH: &str = "cfg/settings.toml";
+const APP_CONFIG_PATH: &str = "cfg";
 
 fn choose_via_user_input<T>(title_str: &str, options: Vec<T>) -> io::Result<usize>
 where
@@ -81,7 +81,7 @@ fn choose_device_config(_device: &Device) -> StreamConfig {
 
 fn main() {
     let app_config = Cfg::new(APP_CONFIG_PATH).unwrap();
-    println!("Using app config at {}", APP_CONFIG_PATH);
+    println!("Using app configs at {}", APP_CONFIG_PATH);
 
     let host = choose_host();
     println!("Using host {}", host.id().name());

@@ -1,5 +1,7 @@
 use config::{Config, ConfigError, File};
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 pub struct AppCfg {
@@ -58,17 +60,37 @@ pub struct GameCfg {
 #[derive(Debug, Deserialize)]
 pub struct Cfg {
     pub app: AppCfg,
-    pub gui: GuiCfg,
     pub audio: AudioCfg,
     pub game: GameCfg,
     pub console: ConsoleCfg,
+    #[cfg(feature = "gui")]
+    pub gui: GuiCfg,
+}
+
+fn get_cfg<T>(path: &str) -> Result<T, ConfigError>
+where
+    T: DeserializeOwned,
+{
+    let mut s = Config::default();
+    s.merge(File::with_name(path))?;
+    s.try_into()
 }
 
 impl Cfg {
     pub fn new(path: &str) -> Result<Self, ConfigError> {
-        let mut s = Config::default();
+        let base_path = Path::new(path);
+        let app_cfg = get_cfg(base_path.join(Path::new("app.toml")).to_str().unwrap())?;
+        let audio_cfg = get_cfg(base_path.join(Path::new("audio.toml")).to_str().unwrap())?;
+        let game_cfg = get_cfg(base_path.join(Path::new("game.toml")).to_str().unwrap())?;
+        let console_cfg = get_cfg(base_path.join(Path::new("console.toml")).to_str().unwrap())?;
 
-        s.merge(File::with_name(path))?;
-        s.try_into()
+        Ok(Cfg {
+            app: app_cfg,
+            audio: audio_cfg,
+            game: game_cfg,
+            console: console_cfg,
+            #[cfg(feature = "gui")]
+            gui: get_cfg(base_path.join(Path::new("gui.toml")).to_str().unwrap())?,
+        })
     }
 }

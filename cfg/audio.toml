@@ -1,0 +1,14 @@
+# increasing this value generates higher resolution FFTs
+fft_res_factor = 2.0
+fft_magnitude_gain = 10.0
+# Effects peak detection. Increasing it would cause the algorithm
+# to detect less peaks
+peak_threshold = 500.0
+# Min distance between adjacent peaks. Good for very noisy audios.
+min_peak_dist = 10
+# Number of highest peaks in the spectrum to consider when detecting
+# the fundamental frequency.
+num_top_peaks = 5
+# Increasing smooths the audio signal even more, but might distort the
+# results.
+moving_avg_window_size = 11
