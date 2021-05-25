@@ -8,7 +8,7 @@ mod note_registry;
 mod string_range;
 mod tuning;
 
-pub use cfg::{AppCfg, AudioCfg, Cfg, ConsoleCfg, GameCfg, GuiCfg};
+pub use cfg::*;
 pub use fret_loc::FretLoc;
 pub use fret_range::FretRange;
 pub use note::Note;

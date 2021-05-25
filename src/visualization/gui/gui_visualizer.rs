@@ -1,6 +1,6 @@
 // DISCLAIMER: Major parts of the frame handling in this file is adapted
 // from https://github.com/38/plotters/blob/master/examples/minifb-demo/src/main.rs
-use crate::core::GuiCfg;
+use crate::visualization::gui::GuiCfg;
 use crate::visualization::Visualizer;
 use minifb::{Key, Window, WindowOptions};
 use plotters::chart::ChartState;
