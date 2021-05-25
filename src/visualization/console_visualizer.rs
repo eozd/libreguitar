@@ -1,5 +1,6 @@
 use crate::core::{ConsoleCfg, FretLoc, FretRange, StringRange, Tuning};
 use crate::game::GameState;
+use crate::visualization::Visualizer;
 use console::Term;
 use std::error::Error;
 use std::fmt;
@@ -49,12 +50,14 @@ impl ConsoleVisualizer {
             fb_drawer,
         }
     }
+}
 
-    pub fn is_open(&self) -> bool {
+impl Visualizer for ConsoleVisualizer {
+    fn is_open(&self) -> bool {
         true
     }
 
-    pub fn draw(&mut self) {
+    fn draw(&mut self) {
         let packet = self.rx.try_recv();
         if let Ok(game_state) = packet {
             self.term.clear_screen().unwrap();

@@ -1,7 +1,9 @@
 mod console_visualizer;
-mod frame_data;
-mod gui_visualizer;
-
+mod visualizer;
 pub use console_visualizer::ConsoleVisualizer;
-pub use frame_data::FrameData;
-pub use gui_visualizer::GUIVisualizer;
+pub use visualizer::Visualizer;
+
+#[cfg(feature = "gui")]
+mod gui_visualizer;
+#[cfg(feature = "gui")]
+pub use gui_visualizer::{FrameData, GUIVisualizer};
