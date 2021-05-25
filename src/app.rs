@@ -1,7 +1,9 @@
-use crate::audio_analysis::{AnalysisResult, AudioAnalyzer};
-use crate::core::{AppCfg, Cfg, NoteRegistry, Tuning};
+use crate::audio_analysis::AudioAnalyzer;
+use crate::core::{Cfg, NoteRegistry, Tuning};
 use crate::game::{GameError, GameLogic};
-use crate::visualization::{ConsoleVisualizer, FrameData, GUIVisualizer};
+use crate::visualization::{ConsoleVisualizer, Visualizer};
+#[cfg(feature = "gui")]
+use crate::visualization::{FrameData, GUIVisualizer, GuiCfg};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::mpsc;
@@ -28,10 +30,9 @@ pub enum AppError {
 
 pub struct App {
     audio_stream: Stream,
-    gui_visualizer: GUIVisualizer,
-    console_visualizer: ConsoleVisualizer,
+    visualizers: Vec<Box<dyn Visualizer>>,
     game_logic: GameLogic,
-    app_cfg: AppCfg,
+    frame_period: f64,
 }
 
 impl App {
@@ -39,20 +40,13 @@ impl App {
         let app_cfg = cfg.app;
         let note_registry = NoteRegistry::from_csv(&app_cfg.frequencies_path)?;
         let tuning = Tuning::from_csv(&app_cfg.tuning_path, &note_registry)?;
-        let analyzer = AudioAnalyzer::new(
+        let mut analyzer = AudioAnalyzer::new(
             device_config.sample_rate.0 as usize,
             note_registry.notes(),
             cfg.audio,
         );
-        let xaxis_props = (
-            0.0,
-            analyzer.n_bins() as f64 / analyzer.delta_f(),
-            analyzer.delta_f(),
-        );
-        let (gui_tx, gui_rx) = mpsc::channel();
         let (analysis_tx, analysis_rx) = mpsc::channel();
         let (console_tx, console_rx) = mpsc::channel();
-        let gui_visualizer = GUIVisualizer::new(gui_rx, xaxis_props, cfg.gui);
         let game_logic = GameLogic::new(
             analysis_rx,
             vec![console_tx],
@@ -67,65 +61,94 @@ impl App {
             cfg.console,
             tuning,
         );
-        let audio_stream = build_connection_protocols(
+        let visualizers: Vec<Box<dyn Visualizer>> = vec![Box::new(console_visualizer)];
+        #[cfg(feature = "gui")]
+        let (gui_tx, gui_rx) = mpsc::channel();
+        #[cfg(feature = "gui")]
+        let visualizers = add_gui_visualizer(
+            visualizers,
+            analyzer.n_bins(),
+            analyzer.delta_f(),
+            gui_rx,
+            cfg.gui,
+        );
+        let audio_read_callback: Box<CallbackFn> =
+            Box::new(move |data: Box<dyn ExactSizeIterator<Item = f64>>| {
+                let analysis = analyzer.identify_note(data);
+                // send data to game logic
+                analysis_tx.send(analysis).unwrap();
+                #[cfg(feature = "gui")]
+                {
+                    // send data to GUI
+                    let frame_data = FrameData {
+                        spectrogram: analyzer.spectrogram().clone(),
+                    };
+                    gui_tx.send(frame_data).unwrap();
+                }
+            });
+        let audio_stream = create_audio_stream(
             device,
             device_config,
-            analyzer,
-            gui_tx,
-            analysis_tx,
             app_cfg.block_size,
+            audio_read_callback,
         )?;
         Ok(App {
             audio_stream,
-            gui_visualizer,
-            console_visualizer,
+            visualizers,
             game_logic,
-            app_cfg,
+            frame_period: 1.0 / app_cfg.fps,
         })
     }
 
     fn is_running(&self) -> bool {
-        self.gui_visualizer.is_open() && self.console_visualizer.is_open()
+        self.visualizers.iter().all(|v| v.is_open())
     }
 
     pub fn run(&mut self) -> Result<(), AppError> {
         self.audio_stream.play()?;
         self.game_logic.play()?;
-        let frame_period = 1.0 / self.app_cfg.fps;
         while self.is_running() {
-            self.console_visualizer.draw();
-            self.gui_visualizer.draw();
-            std::thread::sleep(std::time::Duration::from_secs_f64(frame_period));
+            for visualizer in self.visualizers.iter_mut() {
+                visualizer.draw();
+            }
+            std::thread::sleep(std::time::Duration::from_secs_f64(self.frame_period));
         }
         Ok(())
     }
 }
 
-fn build_connection_protocols(
+#[cfg(feature = "gui")]
+fn add_gui_visualizer(
+    mut visualizers: Vec<Box<dyn Visualizer>>,
+    n_bins: usize,
+    delta_f: f64,
+    gui_rx: mpsc::Receiver<FrameData>,
+    cfg: GuiCfg,
+) -> Vec<Box<dyn Visualizer>> {
+    let xaxis_props = (0.0, n_bins as f64 / delta_f, delta_f);
+    let gui_visualizer = GUIVisualizer::new(gui_rx, xaxis_props, cfg);
+    visualizers.push(Box::new(gui_visualizer));
+    visualizers
+}
+
+type CallbackFn = dyn for<'a> FnMut(Box<dyn ExactSizeIterator<Item = f64> + 'a>) + Send;
+
+fn create_audio_stream(
     device: Device,
     device_config: StreamConfig,
-    mut analyzer: AudioAnalyzer,
-    gui_tx: mpsc::Sender<FrameData>,
-    analysis_tx: mpsc::Sender<AnalysisResult>,
     block_size: usize,
+    mut callback: Box<CallbackFn>,
 ) -> Result<Stream, BuildStreamError> {
     let mut audio_buffer = VecDeque::from(vec![0.0f64; block_size]);
     audio_buffer.shrink_to_fit();
     let n_channels = device_config.channels as usize;
     // TODO: get from user
-    let listened_channel = 0;
+    let listened_channel = 1;
     device.build_input_stream(
         &device_config,
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
             read_channel_buffered(data, n_channels, listened_channel, &mut audio_buffer);
-            let analysis = analyzer.identify_note(audio_buffer.iter().cloned());
-            // send data to game logic
-            analysis_tx.send(analysis).unwrap();
-            // send data to GUI
-            let frame_data = FrameData {
-                spectrogram: analyzer.spectrogram().clone(),
-            };
-            gui_tx.send(frame_data).unwrap();
+            callback(Box::new(audio_buffer.iter().cloned()));
         },
         move |_err| {
             // Mainly happens if we miss some audio frames.
