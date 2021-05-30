@@ -1,35 +1,108 @@
-name: Rust
+name: Rust Build and Test
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  schedule:
+  - cron: '0 0 * * *'
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  tests:
-    runs-on: ubuntu-latest
+  test:
+    name: test
+    env:
+      CARGO: cargo
+      TARGET_FLAGS: 
+      TARGET_DIR: ./target
+      RUST_BACKTRACE: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build:
+        - ubuntu-pinned
+        - ubuntu-stable
+        - cross-linux-gnu
+        include:
+        - build: ubuntu-pinned
+          os: ubuntu-18.04
+          rust: 1.52.0
+        - build: ubuntu-stable
+          os: ubuntu-18.04
+          rust: stable
+        - build: cross-linux-gnu
+          os: ubuntu-18.04
+          rust: stable
+          target: x86_64-unknown-linux-gnu
     steps:
-    - uses: actions/checkout@v2
-    - name: System Dependencies
-      run: sudo apt-get install libasound2-dev libjack-dev
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-  lints:
-    runs-on: ubuntu-latest
+    - name: Install packages (Ubuntu)
+      if: matrix.target == ''
+      run: |
+        sudo apt-get update && sudo apt-get install -y `cat ci/ubuntu-packages`
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust }}
+        profile: minimal
+        override: true
+
+    - name: Use Cross
+      if: matrix.target != ''
+      run: |
+        cargo install cross
+        echo "CARGO=cross" >> $GITHUB_ENV
+        echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
+        echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
+
+    - name: Show command used for Cargo
+      run: |
+        echo "cargo command: ${{ env.CARGO }}"
+        echo "target flag: ${{ env.TARGET_FLAGS }}"
+
+    - name: Build libreguitar
+      run: ${{ env.CARGO }} build --verbose --all ${{ env.TARGET_FLAGS }}
+
+    - name: Build libreguitar with all features
+      run: ${{ env.CARGO }} build --verbose --all --features gui ${{ env.TARGET_FLAGS }}
+
+    - name: Show build.rs stderr
+      shell: bash
+      run: |
+        set +x
+        stderr="$(find "${{ env.TARGET_DIR }}/debug" -name stderr -print0 | xargs -0 ls -t | head -n1)"
+        if [ -s "$stderr" ]; then
+          echo "===== $stderr ===== "
+          cat "$stderr"
+          echo "====="
+        fi
+        set -x
+
+    - name: Run tests with all features
+      run: ${{ env.CARGO }} test --verbose --all --features gui ${{ env.TARGET_FLAGS }}
+
+  lint:
+    name: lint
+    runs-on: ubuntu-18.04
     steps:
-    - uses: actions/checkout@v2
-    - name: System Dependencies
-      run: sudo apt-get install libasound2-dev libjack-dev
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Install packages (Ubuntu)
+      run: |
+        sudo apt-get update && sudo apt-get install -y `cat ci/ubuntu-packages`
+
     - name: Install Clippy
       run: rustup component add clippy
-    - uses: actions-rs/clippy-check@v1
+
+    - name: Run Clippy
+      uses: actions-rs/clippy-check@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         args: --all-features

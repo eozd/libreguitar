@@ -1,0 +1,5 @@
+alsa-lib-devel
+jack-audio-connection-kit-devel
+libxkbcommon-devel
+freetype-devel
+expat-devel

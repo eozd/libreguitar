@@ -143,7 +143,7 @@ fn create_audio_stream(
     audio_buffer.shrink_to_fit();
     let n_channels = device_config.channels as usize;
     // TODO: get from user
-    let listened_channel = 1;
+    let listened_channel = 0;
     device.build_input_stream(
         &device_config,
         move |data: &[f32], _: &cpal::InputCallbackInfo| {

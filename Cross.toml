@@ -1,0 +1,2 @@
+[target.x86_64-unknown-linux-gnu]
+image = "eozd/libreguitar-cross:x86_64-unknown-linux-gnu"
