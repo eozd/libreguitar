@@ -10,7 +10,6 @@ edition = "2018"
 thiserror = "1.0"
 rustfft = "6.0"
 realfft = "2.0"
-cpal = { version = "0.13.3", features = ["jack"] }
 csv = "1.1"
 rand = "0.8"
 serde = { version = "1", features = ["derive"]}
@@ -20,6 +19,12 @@ console = "0.14"
 minifb = { version = "0.13", optional = true }
 plotters = { version = "0.3", default_features = false, features = ["ttf", "line_series"], optional = true}
 plotters-bitmap = { version = "0.3", default_features = false, optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+cpal = { version = "0.13.3", default_features = false}
+
+[target.'cfg(target_os = "linux")'.dependencies]
+cpal = { version = "0.13.3", default_features = false, features = ["jack"] }
 
 [features]
 default = []
