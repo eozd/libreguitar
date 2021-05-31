@@ -23,6 +23,9 @@ plotters-bitmap = { version = "0.3", default_features = false, optional = true }
 [target.'cfg(target_os = "windows")'.dependencies]
 cpal = { version = "0.13.3", default_features = false}
 
+[target.'cfg(target_os = "macos")'.dependencies]
+cpal = { version = "0.13.3", default_features = false}
+
 [target.'cfg(target_os = "linux")'.dependencies]
 cpal = { version = "0.13.3", default_features = false, features = ["jack"] }
 
