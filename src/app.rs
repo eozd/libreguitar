@@ -4,6 +4,7 @@ use crate::game::{GameError, GameLogic};
 use crate::visualization::{ConsoleVisualizer, Visualizer};
 #[cfg(feature = "gui")]
 use crate::visualization::{FrameData, GUIVisualizer, GuiCfg};
+use log::*;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::mpsc;
@@ -152,7 +153,7 @@ fn create_audio_stream(
         },
         move |_err| {
             // Mainly happens if we miss some audio frames.
-            // println!("Error reading data from device {}", _err);
+            info!("Error reading data from device {}", _err);
         },
     )
 }

@@ -1,4 +1,5 @@
 use crate::core::{FretLoc, FretRange, Note, NoteRegistry, StringRange, Tuning};
+use log::*;
 use std::collections::HashMap;
 
 pub struct ActiveNotes {
@@ -21,7 +22,7 @@ impl ActiveNotes {
             if let Some(note) = maybe_note {
                 notes.insert(loc, note.clone());
             } else {
-                println!(
+                info!(
                     "Note on string {} fret {} does not exist in frequency list. Skipping...",
                     loc.string_idx, loc.fret_idx
                 );
