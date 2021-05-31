@@ -1,4 +1,8 @@
+#[macro_use]
+extern crate log;
+use simplelog::{CombinedLogger, ConfigBuilder as LogConfigBuilder, LevelFilter, WriteLogger};
 use std::fmt::Display;
+use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::iter;
 
@@ -79,18 +83,30 @@ fn choose_device_config(_device: &Device) -> StreamConfig {
     }
 }
 
+fn set_up_logger(log_path: &str) {
+    let cfg = LogConfigBuilder::new().set_time_format_str("%FT%T").build();
+    let out_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+        .unwrap();
+    CombinedLogger::init(vec![WriteLogger::new(LevelFilter::Debug, cfg, out_file)]).unwrap();
+}
+
 fn main() {
     let app_config = Cfg::new(APP_CONFIG_PATH).unwrap();
-    println!("Using app configs at {}", APP_CONFIG_PATH);
+    set_up_logger(&app_config.app.log_path);
+
+    info!("Using app configs at {}", APP_CONFIG_PATH);
 
     let host = choose_host();
-    println!("Using host {}", host.id().name());
+    info!("Using host {}", host.id().name());
 
     let device = choose_device(&host);
-    println!("Using device {}", device.name().unwrap());
+    info!("Using device {}", device.name().unwrap());
 
     let device_config = choose_device_config(&device);
-    println!("Using device config {:?}", device_config);
+    info!("Using device config {:?}", device_config);
 
     run(device, device_config, app_config).unwrap();
 }

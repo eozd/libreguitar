@@ -11,6 +11,7 @@ pub struct AppCfg {
     pub frequencies_path: String,
     pub tuning_path: String,
     pub block_size: usize,
+    pub log_path: String,
 }
 
 #[derive(Debug, Deserialize)]

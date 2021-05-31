@@ -6,3 +6,5 @@ tuning_path = "resources/tuning.csv"
 # as the low frequency notes don't get enough time to oscillate. The effect on
 # high frequency notes such A4, A5, etc. is minimal even with block size of 128.
 block_size = 2048
+log_path = "libreguitar.log"
+log_level = "debug"

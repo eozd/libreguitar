@@ -535,7 +535,7 @@ dependencies = [
  "freetype",
  "lazy_static",
  "libc",
- "log",
+ "log 0.4.14",
  "pathfinder_geometry",
  "pathfinder_simd",
  "servo-fontconfig",
@@ -669,7 +669,7 @@ dependencies = [
  "cesu8",
  "combine",
  "jni-sys",
- "log",
+ "log 0.4.14",
  "thiserror",
  "walkdir",
 ]
@@ -763,6 +763,7 @@ dependencies = [
  "console",
  "cpal",
  "csv",
+ "log 0.3.9",
  "minifb",
  "plotters",
  "plotters-bitmap",
@@ -788,6 +789,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0382880606dff6d15c9476c416d18690b72742aa7b605bb6dd6ec9030fbf07eb"
 dependencies = [
  "scopeguard",
+]
+
+[[package]]
+name = "log"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
+dependencies = [
+ "log 0.4.14",
 ]
 
 [[package]]
@@ -891,7 +901,7 @@ checksum = "c5caf0c24d51ac1c905c27d4eda4fa0635bbe0de596b8f79235e0b17a4d29385"
 dependencies = [
  "lazy_static",
  "libc",
- "log",
+ "log 0.4.14",
  "ndk",
  "ndk-macro",
  "ndk-sys",
@@ -1100,7 +1110,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b7b7e7b4ea703700ce73ebf128e1450eb69c3a8329199ffbfb9b2a0418e5ad3"
 dependencies = [
- "log",
+ "log 0.4.14",
  "pathfinder_simd",
 ]
 
@@ -1551,7 +1561,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59d0fe306a0ced1c88a58042dc22fc2ddd000982c26d75f6aa09a394547c41e0"
 dependencies = [
  "chrono",
- "log",
+ "log 0.4.14",
 ]
 
 [[package]]
@@ -1769,7 +1779,7 @@ checksum = "3b33f6a0694ccfea53d94db8b2ed1c3a8a4c86dd936b13b9f0a15ec4a451b900"
 dependencies = [
  "bumpalo",
  "lazy_static",
- "log",
+ "log 0.4.14",
  "proc-macro2",
  "quote",
  "syn",
