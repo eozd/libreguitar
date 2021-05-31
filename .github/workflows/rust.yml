@@ -27,6 +27,7 @@ jobs:
         - ubuntu-stable
         - cross-linux-gnu
         - windows-msvc
+        - macos
         include:
         - build: ubuntu-pinned
           os: ubuntu-18.04
@@ -40,6 +41,9 @@ jobs:
           target: x86_64-unknown-linux-gnu
         - build: windows-msvc
           os: windows-latest
+          rust: stable
+        - build: macos
+          os: macOS-latest
           rust: stable
     steps:
     - name: Checkout repository
