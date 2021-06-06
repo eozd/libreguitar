@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=libreguitar
+GenericName=Libre Guitar
+X-GNOME-FullName=Libre Guitar
+Categories=System;
+Keywords="guitar;app"
+MimeType=application/x-cd-image;application/x-raw-disk-image;
+Icon=com.github.eozd.libreguitar
+Terminal=true
+StartupNotify=true
+Exec=libreguitar %f
