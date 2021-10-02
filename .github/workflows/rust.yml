@@ -95,6 +95,63 @@ jobs:
     - name: Run tests with all features
       run: ${{ env.CARGO }} test --verbose --all --features gui ${{ env.TARGET_FLAGS }}
 
+  appimage:
+    name: appimage
+    env:
+      CARGO: cargo
+      TARGET_FLAGS: 
+      TARGET_DIR: ./target
+      RUST_BACKTRACE: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build:
+        - ubuntu-stable
+        include:
+        - build: ubuntu-stable
+          os: ubuntu-18.04
+          rust: stable
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Install packages (Ubuntu)
+      run: |
+        sudo apt-get update && sudo apt-get install -y `cat ci/ubuntu-packages`
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust }}
+        profile: minimal
+        override: true
+
+    - name: Show command used for Cargo
+      run: |
+        echo "cargo command: ${{ env.CARGO }}"
+        echo "target flag: ${{ env.TARGET_FLAGS }}"
+
+    - name: Build libreguitar
+      run: ${{ env.CARGO }} build --verbose --all ${{ env.TARGET_FLAGS }}
+
+    # - name: Build libreguitar with all features
+    #   run: ${{ env.CARGO }} build --verbose --all --features gui ${{ env.TARGET_FLAGS }}
+
+    - name: Show build.rs stderr
+      shell: bash
+      run: |
+        set +x
+        stderr="$(find "${{ env.TARGET_DIR }}/debug" -name stderr -print0 | xargs -0 ls -t | head -n1)"
+        if [ -s "$stderr" ]; then
+          echo "===== $stderr ===== "
+          cat "$stderr"
+          echo "====="
+        fi
+        set -x
+
+    - name: Build appimage
+      run: cd ci/appimage && chmod +x appimage.sh && ./appimage.sh
+
   lint:
     name: lint
     runs-on: ubuntu-18.04

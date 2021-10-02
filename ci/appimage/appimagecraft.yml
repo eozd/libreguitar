@@ -1,0 +1,18 @@
+version: 1
+
+project:
+  name: com.github.eozd.libreguitar
+  version: 0.1.0
+
+build:
+  script:
+    commands:
+      # unfortunately, no out-of-source builds are possible (yet)
+      - pushd "$PROJECT_ROOT"
+      - make install DESTDIR="$(readlink -f "$BUILD_DIR"/AppDir)" prefix=/usr
+      - popd
+
+appimage:
+  linuxdeploy:
+    environment:
+      UPD_INFO: 'gh-releases-zsync|eozd|libreguitar|latest|libreguitar-*x86_64.AppImage.zsync'
