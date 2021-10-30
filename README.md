@@ -1,6 +1,8 @@
 # LibreGuitar
 ![Unit tests](https://github.com/eozd/fretboard-trainer/workflows/Rust/badge.svg?branch=main)
 
+![LibreGuitar](./libreGuitar.png)
+
 CLI application that recognizes notes played on a guitar through the sound interface. This project
 is still in very early development stages. Some of the possible upcoming features might include:
 1. real time tablature generation, either of your own playing or of some audio files
